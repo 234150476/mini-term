@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.2.28-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.3.0-blue" alt="version">
   <img src="https://img.shields.io/badge/platform-Windows-0078D4" alt="platform">
   <img src="https://img.shields.io/badge/macOS%20%7C%20Linux-experimental-lightgrey" alt="platform-experimental">
   <img src="https://img.shields.io/badge/Tauri-v2-orange" alt="tauri">
@@ -49,6 +49,13 @@ Mini-Term 用一个轻量桌面应用解决以上所有问题。
 - **文件拖拽** — 文件拖到终端自动插入带引号的绝对路径，兼容含空格的路径
 - **多 Shell 配置** — Windows（cmd / powershell / pwsh）、macOS（zsh / bash）、Linux（bash / sh）等，可自由增删
 
+### 文件搜索
+
+- **全局搜索** — `Ctrl+Shift+F` 快捷键或文件树工具栏按钮唤起，支持文件名搜索和文件内容搜索两种模式
+- **正则匹配** — 可切换子串 / 正则模式，结果关键词高亮显示
+- **流式推送** — 后端使用 ignore crate 遍历文件树，每 50 条或 100ms 批量推送结果，支持随时取消
+- **内容分组** — 内容搜索模式按文件分组展示匹配行号，点击结果直接预览并定位到匹配行
+
 ### AI 进程感知
 
 - **实时状态检测** — 500ms 轮询子进程名，自动识别 Claude / Codex，显示 idle / working / error 状态
@@ -60,6 +67,7 @@ Mini-Term 用一个轻量桌面应用解决以上所有问题。
   - 三个开关独立可配
 - **会话进出检测** — 命令 echo 识别进入 AI；双击 `Ctrl+C` / `Ctrl+D` 或 `exit` / `quit` / `:quit` / `/logout` 识别退出
 - **会话历史** — 读取本地 Claude / Codex 历史会话记录，右键复制恢复命令快速续接
+- **会话查看** — 右键「查看」展示完整对话内容，User 纯文本 / Assistant Markdown 渲染，支持 `Ctrl+F` 搜索高亮和 User 消息快速导航
 - **AI 任务标记** — AI 会话内每次用户按 Enter 自动在 xterm 打点，标签右上角 ⚑ 按钮下拉展示历史提交列表，点击或 `Ctrl+Shift+↑/↓` 在标记间跳转，目标行短暂高亮提示
 
 ### 项目管理
@@ -177,6 +185,7 @@ mini-term/
 │   │   ├── GitChanges.tsx       # 源码控制面板（stage / unstage / commit）
 │   │   ├── CommitDiffModal.tsx   # 提交 Diff 查看器
 │   │   ├── DiffModal.tsx         # 工作区文件 Diff 查看器
+│   │   ├── SearchModal.tsx       # 全局文件搜索弹窗
 │   │   ├── FileViewerModal.tsx   # 文件内容查看器
 │   │   ├── SettingsModal.tsx     # 设置弹窗（主题 / 字体 / Shell / AI 通知）
 │   │   ├── ToastContainer.tsx    # AI 完成 Toast 通知
@@ -201,6 +210,7 @@ mini-term/
 │       ├── config.rs             # 配置持久化 + 版本迁移
 │       ├── fs.rs                 # 目录列表 / 监听 / 新建 / 重命名
 │       ├── git.rs                # Git 操作（状态 / Diff / Log / Pull / Push）
+│       ├── search.rs             # 全局文件搜索（文件名 + 内容，流式推送）
 │       └── ai_sessions.rs        # Claude / Codex 会话记录读取
 └── package.json
 ```
@@ -220,8 +230,8 @@ ai-working → ai-idle → Toast + DONE Tag + requestUserAttention
 
 ### Tauri 接口一览
 
-- **Commands（34 个）** — PTY: `create_pty` · `write_pty` · `resize_pty` · `kill_pty`；FS: `list_directory` · `read_file_content` · `watch_directory` · `unwatch_directory` · `create_file` · `create_directory` · `rename_entry` · `filter_directories`；Git: `get_git_status` · `get_git_diff` · `discover_git_repos` · `get_git_log` · `get_repo_branches` · `get_commit_files` · `get_commit_file_diff` · `git_pull` · `git_push` · `get_changes_status` · `git_stage` · `git_unstage` · `git_stage_all` · `git_unstage_all` · `git_commit` · `git_discard_file`；Config: `load_config` · `save_config`；Editor: `open_in_vscode`；Clipboard: `read_clipboard_image` · `save_clipboard_text`；AI: `get_ai_sessions`
-- **Events（后端 → 前端）** — `pty-output` · `pty-exit` · `pty-status-change` · `fs-change`
+- **Commands（39 个）** — PTY: `create_pty` · `write_pty` · `resize_pty` · `kill_pty`；FS: `list_directory` · `read_file_content` · `watch_directory` · `unwatch_directory` · `create_file` · `create_directory` · `rename_entry` · `filter_directories`；Search: `start_search` · `cancel_search`；Git: `get_git_status` · `get_git_diff` · `discover_git_repos` · `get_git_log` · `get_repo_branches` · `get_commit_files` · `get_commit_file_diff` · `git_pull` · `git_push` · `get_changes_status` · `git_stage` · `git_unstage` · `git_stage_all` · `git_unstage_all` · `git_commit` · `git_discard_file`；Config: `load_config` · `save_config`；Editor: `open_in_vscode`；Clipboard: `read_clipboard_image` · `save_clipboard_text`；AI: `get_ai_sessions` · `get_ai_session_content`
+- **Events（后端 → 前端）** — `pty-output` · `pty-exit` · `pty-status-change` · `fs-change` · `search-results` · `search-complete`
 
 ### 状态优先级
 
