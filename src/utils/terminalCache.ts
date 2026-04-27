@@ -88,9 +88,12 @@ export function getTerminalTheme(terminalFollowTheme: boolean): typeof DARK_TERM
 }
 
 const cache = new Map<number, CachedEntry>();
-const enqueuePtyWrite = createPtyWriteQueue((ptyId, data) =>
-  invoke('write_pty', { ptyId, data })
-);
+const enqueuePtyWrite = createPtyWriteQueue((ptyId, data, lineSnapshot) => {
+  const payload = lineSnapshot === undefined
+    ? { ptyId, data }
+    : { ptyId, data, lineSnapshot };
+  return invoke('write_pty', payload);
+});
 
 const markerInstancesByPty = new Map<number, Map<number, IMarker>>();
 
@@ -100,6 +103,29 @@ const FLASH_DURATION_MS = 300;
 /** xterm.js 在 sendFocus 模式下对 focus/blur 发出的 CSI 序列 */
 const FOCUS_IN_SEQ = '\x1b[I';
 const FOCUS_OUT_SEQ = '\x1b[O';
+
+function isStandaloneEnter(data: string): boolean {
+  return data === '\r' || data === '\n' || data === '\r\n';
+}
+
+function getCurrentLineSnapshot(term: Terminal): string | undefined {
+  const buffer = term.buffer.active;
+  const cursorLine = buffer.baseY + buffer.cursorY;
+  let startLine = cursorLine;
+
+  while (startLine > 0 && buffer.getLine(startLine)?.isWrapped) {
+    startLine -= 1;
+  }
+
+  const parts: string[] = [];
+  for (let lineIndex = startLine; lineIndex <= cursorLine; lineIndex += 1) {
+    const line = buffer.getLine(lineIndex);
+    if (line) parts.push(line.translateToString(true));
+  }
+
+  const snapshot = parts.join('').trim();
+  return snapshot.length > 0 ? snapshot : undefined;
+}
 
 export function getOrCreateTerminal(ptyId: number): CachedTerminal {
   const existing = cache.get(ptyId);
@@ -160,10 +186,13 @@ export function getOrCreateTerminal(ptyId: number): CachedTerminal {
   // 事件也通过 triggerDataEvent 发出 CSI I/CSI O。这不是用户按键,如果也跟着
   // scrollToBottom,用户往上翻历史时一切焦点(点别处或切回来)就会被打回底部。
   const onDataDisp = term.onData((data) => {
+    const lineSnapshot = isStandaloneEnter(data)
+      ? getCurrentLineSnapshot(term)
+      : undefined;
     if (data !== FOCUS_IN_SEQ && data !== FOCUS_OUT_SEQ) {
       term.scrollToBottom();
     }
-    void enqueuePtyWrite(ptyId, data);
+    void enqueuePtyWrite(ptyId, data, lineSnapshot);
   });
 
   // 终端 resize → 同步到 PTY

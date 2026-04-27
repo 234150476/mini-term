@@ -92,6 +92,34 @@ function deferred() {
     'start:1:secondthird',
     'end:1:secondthird',
   ]);
+
+  const snapshotEvents = [];
+  const snapshotFirstWrite = deferred();
+  const enqueueSnapshot = createPtyWriteQueue(async (ptyId, data, lineSnapshot) => {
+    snapshotEvents.push(`start:${ptyId}:${data}:${lineSnapshot ?? ''}`);
+    if (data === 'first') {
+      await snapshotFirstWrite.promise;
+    }
+    snapshotEvents.push(`end:${ptyId}:${data}:${lineSnapshot ?? ''}`);
+  });
+
+  const snapshotFirst = enqueueSnapshot(1, 'first');
+  const snapshotPrefix = enqueueSnapshot(1, 'cla');
+  const snapshotTab = enqueueSnapshot(1, '\t');
+  const snapshotEnter = enqueueSnapshot(1, '\r', 'PS D:\\Git\\mini-term> claude');
+  await nextTick();
+
+  assert.deepEqual(snapshotEvents, ['start:1:first:']);
+
+  snapshotFirstWrite.resolve();
+  await Promise.all([snapshotFirst, snapshotPrefix, snapshotTab, snapshotEnter]);
+
+  assert.deepEqual(snapshotEvents, [
+    'start:1:first:',
+    'end:1:first:',
+    'start:1:cla\t\r:PS D:\\Git\\mini-term> claude',
+    'end:1:cla\t\r:PS D:\\Git\\mini-term> claude',
+  ]);
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

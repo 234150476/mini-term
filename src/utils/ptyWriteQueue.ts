@@ -1,7 +1,12 @@
-export type PtyWriteFn = (ptyId: number, data: string) => Promise<unknown>;
+export type PtyWriteFn = (
+  ptyId: number,
+  data: string,
+  lineSnapshot?: string
+) => Promise<unknown>;
 
 interface PendingWrite {
   data: string;
+  lineSnapshot?: string;
   resolve: () => void;
   reject: (reason?: unknown) => void;
 }
@@ -19,9 +24,13 @@ export function createPtyWriteQueue(writeFn: PtyWriteFn) {
       const batch = state.pending;
       state.pending = [];
       const data = batch.map((item) => item.data).join('');
+      const snapshots = batch
+        .map((item) => item.lineSnapshot)
+        .filter((snapshot): snapshot is string => snapshot !== undefined);
+      const lineSnapshot = snapshots[snapshots.length - 1];
 
       try {
-        await writeFn(ptyId, data);
+        await writeFn(ptyId, data, lineSnapshot);
         batch.forEach((item) => item.resolve());
       } catch (error) {
         batch.forEach((item) => item.reject(error));
@@ -38,7 +47,7 @@ export function createPtyWriteQueue(writeFn: PtyWriteFn) {
     void drain(ptyId, state);
   }
 
-  return (ptyId: number, data: string): Promise<void> => {
+  return (ptyId: number, data: string, lineSnapshot?: string): Promise<void> => {
     let state = states.get(ptyId);
     if (!state) {
       state = { pending: [], writing: false };
@@ -46,7 +55,7 @@ export function createPtyWriteQueue(writeFn: PtyWriteFn) {
     }
 
     const promise = new Promise<void>((resolve, reject) => {
-      state.pending.push({ data, resolve, reject });
+      state.pending.push({ data, lineSnapshot, resolve, reject });
     });
 
     if (!state.writing) {

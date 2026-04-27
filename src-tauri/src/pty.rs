@@ -246,29 +246,62 @@ fn strip_ansi_codes(s: &str) -> String {
     result
 }
 
-/// 检查 PTY 输出中是否包含 AI 命令被 echo（例如 "PS C:\> claude" 或单独的 "claude"）
-fn output_contains_ai_command(output: &str) -> bool {
-    let stripped = strip_ansi_codes(output);
-    for line in stripped.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        // 检查首词和末词（首词捕获纯命令行，末词捕获 "prompt> claude" 格式）
-        let first = line.split_whitespace().next().unwrap_or("").to_lowercase();
-        let last = line.split_whitespace().last().unwrap_or("").to_lowercase();
-        for word in [&first, &last] {
-            for &ai in AI_COMMANDS {
-                if *word == ai
-                    || word.ends_with(&format!("/{ai}"))
-                    || word.ends_with(&format!("\\{ai}"))
-                {
-                    return true;
-                }
+fn command_word_matches_ai(word: &str) -> bool {
+    let word = word.trim_matches(|c| matches!(c, '"' | '\'' | '`'));
+    let basename = word.rsplit(['/', '\\']).next().unwrap_or(word);
+    let basename = [".exe", ".cmd", ".bat", ".ps1"]
+        .iter()
+        .find_map(|suffix| basename.strip_suffix(suffix))
+        .unwrap_or(basename);
+    let basename = basename.to_lowercase();
+    AI_COMMANDS.iter().any(|&ai| basename == ai)
+}
+
+fn is_interactive_ai_command(command: &str) -> bool {
+    let mut words = command.split_whitespace();
+    let mut first_word = words.next().unwrap_or("");
+    if first_word == "&" {
+        first_word = words.next().unwrap_or("");
+    }
+    if !command_word_matches_ai(first_word) {
+        return false;
+    }
+
+    !words.any(|w| {
+        let flag = w.to_lowercase();
+        NON_INTERACTIVE_FLAGS.iter().any(|&f| flag == f)
+    })
+}
+
+fn line_contains_ai_command(line: &str) -> bool {
+    let line = strip_ansi_codes(line);
+    let line = line.trim();
+    if line.is_empty() {
+        return false;
+    }
+
+    if is_interactive_ai_command(line) {
+        return true;
+    }
+
+    // xterm 行快照通常包含 shell prompt，例如 "PS D:\repo> claude"。
+    // 对常见 prompt 分隔符取最后一段，避免把 prompt 内容当作命令解析。
+    for marker in [">", "$ ", "# ", "% "] {
+        if let Some(idx) = line.rfind(marker) {
+            if is_interactive_ai_command(&line[idx + marker.len()..]) {
+                return true;
             }
         }
     }
+
     false
+}
+
+/// 检查 PTY 输出中是否包含 AI 命令被 echo（例如 "PS C:\> claude" 或单独的 "claude"）
+fn output_contains_ai_command(output: &str) -> bool {
+    strip_ansi_codes(output)
+        .lines()
+        .any(line_contains_ai_command)
 }
 
 #[derive(Clone)]
@@ -356,6 +389,15 @@ impl PtyManager {
     /// 退出 AI 会话：Ctrl+D（EOF）、或输入退出命令（/exit /quit exit quit :quit /logout）
     /// 注意：Ctrl+C 在 AI 会话中是取消当前任务，不是退出会话
     pub fn track_input(&self, pty_id: u32, data: &str) {
+        self.track_input_with_line_snapshot(pty_id, data, None);
+    }
+
+    pub fn track_input_with_line_snapshot(
+        &self,
+        pty_id: u32,
+        data: &str,
+        line_snapshot: Option<&str>,
+    ) {
         let in_ai = self.is_ai_session(pty_id);
         let mut enter_ai = false;
         let mut exit_ai = false;
@@ -433,19 +475,13 @@ impl PtyManager {
                             if AI_EXIT_COMMANDS.iter().any(|&c| cmd == c) {
                                 exit_ai = true;
                             }
-                        } else if !cmd.is_empty() {
-                            // 非 AI 会话：检测 AI 命令启动
-                            let mut words = cmd.split_whitespace();
-                            let first_word = words.next().unwrap_or("");
-                            let is_ai_cmd = AI_COMMANDS.iter().any(|&ai| {
-                                first_word == ai
-                                    || first_word.ends_with(&format!("/{ai}"))
-                                    || first_word.ends_with(&format!("\\{ai}"))
-                            });
-                            // 排除带有非交互标志的命令（如 claude -v, codex --help）
-                            let has_non_interactive_flag = is_ai_cmd
-                                && words.any(|w| NON_INTERACTIVE_FLAGS.iter().any(|&f| w == f));
-                            if is_ai_cmd && !has_non_interactive_flag {
+                        } else {
+                            // 非 AI 会话：检测 AI 命令启动。优先使用本地输入状态；
+                            // 对上方向键历史、Tab 补全等 shell 改写行的场景，使用
+                            // 前端在 Enter 前捕获的可见行快照补判。
+                            let snapshot_is_ai =
+                                line_snapshot.map(line_contains_ai_command).unwrap_or(false);
+                            if is_interactive_ai_command(trimmed) || snapshot_is_ai {
                                 enter_ai = true;
                             }
                         }
@@ -710,9 +746,11 @@ fn write_pty_chunked(writer: &mut dyn Write, data: &str) -> Result<(), String> {
     while start < bytes.len() {
         let end = match bytes[start..].iter().position(|&b| b == b'\n') {
             Some(pos) => start + pos + 1, // 包含 \n
-            None => bytes.len(),           // 最后一段无换行
+            None => bytes.len(),          // 最后一段无换行
         };
-        writer.write_all(&bytes[start..end]).map_err(|e| e.to_string())?;
+        writer
+            .write_all(&bytes[start..end])
+            .map_err(|e| e.to_string())?;
         writer.flush().map_err(|e| e.to_string())?;
         start = end;
         if start < bytes.len() {
@@ -728,6 +766,7 @@ pub fn write_pty(
     state: tauri::State<'_, PtyManager>,
     pty_id: u32,
     data: String,
+    line_snapshot: Option<String>,
 ) -> Result<(), String> {
     // 在写入前打开焦点冷却窗口:AI 对焦点事件的重绘响应几乎立即抵达 reader,
     // 必须早于那之前把冷却建立起来。
@@ -737,7 +776,7 @@ pub fn write_pty(
         let instance = instances.get_mut(&pty_id).ok_or("PTY not found")?;
         write_pty_chunked(&mut *instance.writer, &data)?;
     }
-    state.track_input(pty_id, &data);
+    state.track_input_with_line_snapshot(pty_id, &data, line_snapshot.as_deref());
 
     for submit in state.drain_submits(pty_id) {
         let _ = app.emit(
@@ -790,7 +829,11 @@ pub fn kill_pty(state: tauri::State<'_, PtyManager>, pty_id: u32) -> Result<(), 
     state.last_ctrlc.lock().unwrap().remove(&pty_id);
     state.last_enter.lock().unwrap().remove(&pty_id);
     state.pending_submits.lock().unwrap().remove(&pty_id);
-    state.tui_redraw_cooldown_until.lock().unwrap().remove(&pty_id);
+    state
+        .tui_redraw_cooldown_until
+        .lock()
+        .unwrap()
+        .remove(&pty_id);
 
     // Drop the PTY instance on a background thread.
     //
@@ -1058,7 +1101,10 @@ mod tests {
             .unwrap()
             .entry(1)
             .or_default()
-            .push(UserSubmit { line: "test".into(), ts: 0 });
+            .push(UserSubmit {
+                line: "test".into(),
+                ts: 0,
+            });
         let first = mgr.drain_submits(1);
         assert_eq!(first.len(), 1);
         let second = mgr.drain_submits(1);
@@ -1141,6 +1187,31 @@ mod tests {
         mgr.track_input(1, "\x1b[A"); // 上方向键
         mgr.track_input(1, "\x1b[B"); // 下方向键
         assert!(mgr.drain_submits(1).is_empty());
+    }
+
+    #[test]
+    fn line_snapshot_detects_ai_command_after_history_navigation() {
+        let mgr = PtyManager::new();
+        mgr.track_input(1, "\x1b[A"); // shell/PSReadLine restores a previous command
+        mgr.track_input_with_line_snapshot(1, "\r", Some("PS D:\\Git\\mini-term> claude"));
+        assert!(mgr.is_ai_session(1));
+    }
+
+    #[test]
+    fn line_snapshot_detects_ai_command_after_tab_completion() {
+        let mgr = PtyManager::new();
+        mgr.track_input(1, "cla");
+        mgr.track_input(1, "\t"); // shell completion changes visible line to "claude"
+        mgr.track_input_with_line_snapshot(1, "\r", Some("PS D:\\Git\\mini-term> claude"));
+        assert!(mgr.is_ai_session(1));
+    }
+
+    #[test]
+    fn line_snapshot_respects_non_interactive_ai_flags() {
+        let mgr = PtyManager::new();
+        mgr.track_input(1, "\x1b[A");
+        mgr.track_input_with_line_snapshot(1, "\r", Some("PS D:\\Git\\mini-term> codex --help"));
+        assert!(!mgr.is_ai_session(1));
     }
 
     #[test]
