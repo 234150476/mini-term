@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -18,38 +18,133 @@ function formatTime(iso: string): string {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 }
 
+function escapeRegex(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function HighlightText({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>;
+  const parts = text.split(new RegExp(`(${escapeRegex(query)})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query.toLowerCase() ? (
+          <mark key={i} className="bg-[var(--color-warning,#f59e0b)]/40 text-inherit rounded-[2px] px-[1px]">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 export function SessionViewerModal({ open, onClose, session, projectPath }: Props) {
   const [messages, setMessages] = useState<AiSessionMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [matchIdx, setMatchIdx] = useState(0);
+  const [userIdx, setUserIdx] = useState(-1);
+
+  const msgRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open || !session) return;
     setLoading(true);
     setError('');
     setMessages([]);
+    setSearch('');
+    setMatchIdx(0);
+    setUserIdx(-1);
 
     invoke<AiSessionMessage[]>('get_ai_session_content', {
       sessionType: session.sessionType,
       sessionId: session.id,
       projectPath,
     })
-      .then(setMessages)
+      .then((msgs) => {
+        setMessages(msgs);
+        msgRefs.current = new Array(msgs.length).fill(null);
+      })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, [open, session, projectPath]);
 
+  const userIndices = useMemo(
+    () => messages.reduce<number[]>((acc, m, i) => { if (m.role === 'user') acc.push(i); return acc; }, []),
+    [messages],
+  );
+
+  const q = search.trim().toLowerCase();
+
+  const matchIndices = useMemo(() => {
+    if (!q) return [];
+    return messages.reduce<number[]>((acc, m, i) => {
+      if (m.content.toLowerCase().includes(q)) acc.push(i);
+      return acc;
+    }, []);
+  }, [messages, q]);
+
+  useEffect(() => {
+    setMatchIdx(0);
+    if (matchIndices.length > 0) {
+      msgRefs.current[matchIndices[0]]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [matchIndices]);
+
   useEffect(() => {
     if (!open) return;
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'f' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      } else if (e.key === 'Escape') {
+        if (search) {
+          setSearch('');
+        } else {
+          onClose();
+        }
+      } else if (e.key === 'Enter' && document.activeElement === searchRef.current) {
+        e.preventDefault();
+        if (matchIndices.length === 0) return;
+        const dir = e.shiftKey ? -1 : 1;
+        setMatchIdx((prev) => {
+          const next = (prev + dir + matchIndices.length) % matchIndices.length;
+          msgRefs.current[matchIndices[next]]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return next;
+        });
+      }
+    };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [open, onClose]);
+  }, [open, onClose, search, matchIndices]);
+
+  const goMatch = (dir: 1 | -1) => {
+    if (matchIndices.length === 0) return;
+    const next = (matchIdx + dir + matchIndices.length) % matchIndices.length;
+    setMatchIdx(next);
+    msgRefs.current[matchIndices[next]]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const goUser = (dir: 1 | -1) => {
+    if (userIndices.length === 0) return;
+    let next: number;
+    if (userIdx < 0) {
+      next = dir === 1 ? 0 : userIndices.length - 1;
+    } else {
+      next = (userIdx + dir + userIndices.length) % userIndices.length;
+    }
+    setUserIdx(next);
+    msgRefs.current[userIndices[next]]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
 
   if (!open || !session) return null;
 
   const typeName = session.sessionType === 'claude' ? 'Claude' : 'Codex';
   const typeColor = session.sessionType === 'claude' ? 'var(--color-ai)' : 'var(--color-success)';
+  const isMatch = (i: number) => q && matchIndices.includes(i);
+  const isCurrentMatch = (i: number) => q && matchIndices[matchIdx] === i;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center select-text" onClick={onClose}>
@@ -59,8 +154,8 @@ export function SessionViewerModal({ open, onClose, session, projectPath }: Prop
         style={{ width: '90vw', height: '80vh' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 工具栏 */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] flex-shrink-0">
+        {/* 标题栏 */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border-subtle)] flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <span
               className="flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded"
@@ -68,49 +163,83 @@ export function SessionViewerModal({ open, onClose, session, projectPath }: Prop
             >
               {typeName}
             </span>
-            <span className="text-base font-medium text-[var(--text-primary)] truncate">
-              {session.title}
-            </span>
-            <span className="text-xs text-[var(--text-muted)] flex-shrink-0">
-              {messages.length > 0 && `${messages.length} 条消息`}
-            </span>
+            <span className="text-base font-medium text-[var(--text-primary)] truncate">{session.title}</span>
+            {messages.length > 0 && (
+              <span className="text-xs text-[var(--text-muted)] flex-shrink-0">{messages.length} 条消息</span>
+            )}
           </div>
-          <button
-            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors text-lg leading-none flex-shrink-0 ml-2"
-            onClick={onClose}
-          >
-            ✕
-          </button>
+
+          <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+            {/* User 消息快速导航 */}
+            {userIndices.length > 0 && (
+              <div className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+                <button className="hover:text-[var(--text-primary)] transition-colors px-0.5" onClick={() => goUser(-1)} title="上一个用户消息">
+                  ▲
+                </button>
+                <span className="min-w-[4em] text-center">
+                  User {userIdx >= 0 ? userIdx + 1 : '-'}/{userIndices.length}
+                </span>
+                <button className="hover:text-[var(--text-primary)] transition-colors px-0.5" onClick={() => goUser(1)} title="下一个用户消息">
+                  ▼
+                </button>
+              </div>
+            )}
+            <button className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors text-lg leading-none" onClick={onClose}>
+              ✕
+            </button>
+          </div>
         </div>
 
-        {/* 内容区 */}
+        {/* 搜索栏 */}
+        {messages.length > 0 && (
+          <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[var(--border-subtle)] flex-shrink-0 bg-[var(--bg-surface)]">
+            <span className="text-xs text-[var(--text-muted)]">🔍</span>
+            <input
+              ref={searchRef}
+              type="text"
+              className="flex-1 bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+              placeholder="搜索消息内容… (Ctrl+F)"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {q && (
+              <div className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+                {matchIndices.length > 0 ? (
+                  <>
+                    <button className="hover:text-[var(--text-primary)] px-0.5" onClick={() => goMatch(-1)}>◀</button>
+                    <span>{matchIdx + 1}/{matchIndices.length}</span>
+                    <button className="hover:text-[var(--text-primary)] px-0.5" onClick={() => goMatch(1)}>▶</button>
+                  </>
+                ) : (
+                  <span>无匹配</span>
+                )}
+                <button className="hover:text-[var(--text-primary)] ml-1 px-0.5" onClick={() => setSearch('')}>✕</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 消息列表 */}
         <div className="flex-1 overflow-auto bg-[var(--bg-base)] p-4 space-y-4">
-          {loading && (
-            <div className="flex items-center justify-center h-full text-[var(--text-muted)]">加载中...</div>
-          )}
-          {error && (
-            <div className="flex items-center justify-center h-full text-[var(--color-error)]">{error}</div>
-          )}
+          {loading && <div className="flex items-center justify-center h-full text-[var(--text-muted)]">加载中...</div>}
+          {error && <div className="flex items-center justify-center h-full text-[var(--color-error)]">{error}</div>}
           {!loading && !error && messages.length === 0 && (
             <div className="flex items-center justify-center h-full text-[var(--text-muted)]">无消息内容</div>
           )}
 
           {messages.map((msg, i) => (
-            <div key={i}>
-              {/* 角色标签 + 时间 */}
+            <div
+              key={i}
+              ref={(el) => { msgRefs.current[i] = el; }}
+              className={isCurrentMatch(i) ? 'ring-2 ring-[var(--color-warning,#f59e0b)] rounded-[var(--radius-sm)]' : ''}
+              style={q && !isMatch(i) ? { opacity: 0.35 } : undefined}
+            >
               <div className="flex items-center gap-2 mb-1">
-                <span
-                  className="text-xs font-semibold"
-                  style={{ color: msg.role === 'user' ? 'var(--text-secondary)' : typeColor }}
-                >
+                <span className="text-xs font-semibold" style={{ color: msg.role === 'user' ? 'var(--text-secondary)' : typeColor }}>
                   {msg.role === 'user' ? 'User' : 'Assistant'}
                 </span>
-                {msg.timestamp && (
-                  <span className="text-[10px] text-[var(--text-muted)]">{formatTime(msg.timestamp)}</span>
-                )}
+                {msg.timestamp && <span className="text-[10px] text-[var(--text-muted)]">{formatTime(msg.timestamp)}</span>}
               </div>
-
-              {/* 消息内容 */}
               <div
                 className={`rounded-[var(--radius-sm)] px-3 py-2 text-sm ${
                   msg.role === 'user'
@@ -123,7 +252,9 @@ export function SessionViewerModal({ open, onClose, session, projectPath }: Prop
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                   </div>
                 ) : (
-                  <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.content}</div>
+                  <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {q ? <HighlightText text={msg.content} query={search.trim()} /> : msg.content}
+                  </div>
                 )}
               </div>
             </div>
