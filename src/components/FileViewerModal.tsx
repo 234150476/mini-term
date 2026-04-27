@@ -102,13 +102,25 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot }: FileVi
             </div>
           )}
           {result && result.isBinary && (
-            <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
-              二进制文件，不支持预览
+            <div className="flex flex-col items-center justify-center h-full gap-4 text-[var(--text-muted)]">
+              <span>二进制文件，不支持预览</span>
+              <button
+                className="px-4 py-1.5 text-sm rounded-[var(--radius-sm)] bg-[var(--accent)] text-[var(--bg-base)] hover:opacity-90 transition-opacity"
+                onClick={() => invoke('open_path_with_default_app', { path: filePath })}
+              >
+                使用默认工具打开
+              </button>
             </div>
           )}
           {result && result.tooLarge && (
-            <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
-              文件过大（&gt;1MB），不支持预览
+            <div className="flex flex-col items-center justify-center h-full gap-4 text-[var(--text-muted)]">
+              <span>文件过大（&gt;1MB），不支持预览</span>
+              <button
+                className="px-4 py-1.5 text-sm rounded-[var(--radius-sm)] bg-[var(--accent)] text-[var(--bg-base)] hover:opacity-90 transition-opacity"
+                onClick={() => invoke('open_path_with_default_app', { path: filePath })}
+              >
+                使用默认工具打开
+              </button>
             </div>
           )}
           {result && !result.isBinary && !result.tooLarge && isMd && preview ? (
