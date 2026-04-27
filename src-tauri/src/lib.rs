@@ -4,6 +4,7 @@ mod config;
 mod editor;
 mod fs;
 mod git;
+mod search;
 mod process_monitor;
 mod pty;
 
@@ -27,6 +28,7 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .manage(pty::PtyManager::new())
         .manage(fs::FsWatcherManager::new())
+        .manage(search::SearchManager::new())
         .setup(|app| {
             // identifier 从 com.tauri-app.tauri-app 切换为 com.mini-term.app 后,
             // 第一次启动时把旧 app_data_dir 下的 config.json 拷到新目录,
@@ -92,6 +94,8 @@ pub fn run() {
             editor::open_path_with_default_app,
             clipboard::read_clipboard_image,
             clipboard::save_clipboard_text,
+            search::start_search,
+            search::cancel_search,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

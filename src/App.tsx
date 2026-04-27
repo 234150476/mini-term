@@ -12,6 +12,7 @@ import { FileTree } from './components/FileTree';
 import { GitHistory } from './components/GitHistory';
 import { ActivityBar } from './components/ActivityBar';
 import { SettingsModal } from './components/SettingsModal';
+import { SearchModal } from './components/SearchModal';
 import { ToastContainer } from './components/ToastContainer';
 import { useTauriEvent } from './hooks/useTauriEvent';
 import { useAiSubmitMarker } from './hooks/useAiSubmitMarker';
@@ -31,6 +32,8 @@ export function App() {
   const config = useAppStore((s) => s.config);
   const setConfig = useAppStore((s) => s.setConfig);
   const updatePaneStatusByPty = useAppStore((s) => s.updatePaneStatusByPty);
+  const searchModalOpen = useAppStore((s) => s.searchModalOpen);
+  const setSearchModalOpen = useAppStore((s) => s.setSearchModalOpen);
 
   useEffect(() => {
     invoke<AppConfig>('load_config').then((cfg) => {
@@ -93,6 +96,19 @@ export function App() {
       document.removeEventListener('dragover', prevent);
       document.removeEventListener('drop', prevent);
     };
+  }, []);
+
+  // Ctrl+Shift+F 打开/关闭搜索弹窗
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+        e.preventDefault();
+        const { searchModalOpen: isOpen, setSearchModalOpen: setOpen } = useAppStore.getState();
+        setOpen(!isOpen);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // 主题变化时应用新主题
@@ -281,6 +297,7 @@ export function App() {
         </Allotment> : null}
       </div>
       <SettingsModal open={configOpen} onClose={() => setConfigOpen(false)} />
+      <SearchModal open={searchModalOpen} onClose={() => setSearchModalOpen(false)} />
       <ToastContainer />
     </div>
   );

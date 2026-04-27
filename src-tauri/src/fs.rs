@@ -63,7 +63,7 @@ fn is_path_ignored(gitignores: &[Gitignore], full_path: &Path, is_dir: bool) -> 
     ignored
 }
 
-const ALWAYS_IGNORE: &[&str] = &[".git", "node_modules", "target", ".next", "dist", "__pycache__", ".superpowers"];
+pub const ALWAYS_IGNORE: &[&str] = &[".git", "node_modules", "target", ".next", "dist", "__pycache__", ".superpowers"];
 
 /// Windows 上 `Path::canonicalize()` 会给普通盘符路径加上 `\\?\` verbatim 前缀
 /// (绕过 MAX_PATH 限制),这种形式回传前端后拖进 shell 不友好。

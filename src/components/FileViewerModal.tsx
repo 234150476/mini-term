@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -9,18 +9,20 @@ interface FileViewerModalProps {
   onClose: () => void;
   filePath: string;
   projectRoot: string;
+  highlightLine?: number;
 }
 
 function isMarkdownFile(path: string) {
   return /\.(md|markdown|mkd|mdx)$/i.test(path);
 }
 
-export function FileViewerModal({ open, onClose, filePath, projectRoot }: FileViewerModalProps) {
+export function FileViewerModal({ open, onClose, filePath, projectRoot, highlightLine }: FileViewerModalProps) {
   const [result, setResult] = useState<FileContentResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const isMd = useMemo(() => isMarkdownFile(filePath), [filePath]);
   const [preview, setPreview] = useState(true);
+  const highlightRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -42,6 +44,12 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot }: FileVi
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (result && highlightLine && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [result, highlightLine]);
 
   if (!open) return null;
 
@@ -132,7 +140,11 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot }: FileVi
           ) : result && !result.isBinary && !result.tooLarge && (
             <div className="font-mono text-sm leading-6">
               {result.content.split('\n').map((line, i) => (
-                <div key={i} className="flex hover:bg-[var(--border-subtle)]">
+                <div
+                  key={i}
+                  ref={i + 1 === highlightLine ? highlightRef : undefined}
+                  className={`flex hover:bg-[var(--border-subtle)] ${i + 1 === highlightLine ? 'bg-[var(--accent-muted)]' : ''}`}
+                >
                   <span className="w-12 text-right pr-3 text-[var(--text-muted)] select-none flex-shrink-0 opacity-40">
                     {i + 1}
                   </span>
