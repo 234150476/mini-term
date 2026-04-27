@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { FileContentResult } from '../types';
 
 interface FileViewerModalProps {
@@ -9,10 +11,16 @@ interface FileViewerModalProps {
   projectRoot: string;
 }
 
+function isMarkdownFile(path: string) {
+  return /\.(md|markdown|mkd|mdx)$/i.test(path);
+}
+
 export function FileViewerModal({ open, onClose, filePath, projectRoot }: FileViewerModalProps) {
   const [result, setResult] = useState<FileContentResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const isMd = useMemo(() => isMarkdownFile(filePath), [filePath]);
+  const [preview, setPreview] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -55,12 +63,30 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot }: FileVi
               {filePath}
             </span>
           </div>
-          <button
-            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors text-lg leading-none"
-            onClick={onClose}
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            {isMd && result && !result.isBinary && !result.tooLarge && (
+              <div className="flex rounded-[var(--radius-sm)] border border-[var(--border-default)] overflow-hidden text-xs">
+                <button
+                  className={`px-2.5 py-1 transition-colors ${preview ? 'bg-[var(--accent)] text-[var(--bg-base)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                  onClick={() => setPreview(true)}
+                >
+                  预览
+                </button>
+                <button
+                  className={`px-2.5 py-1 transition-colors ${!preview ? 'bg-[var(--accent)] text-[var(--bg-base)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                  onClick={() => setPreview(false)}
+                >
+                  源码
+                </button>
+              </div>
+            )}
+            <button
+              className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors text-lg leading-none"
+              onClick={onClose}
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* 内容区 */}
@@ -85,7 +111,13 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot }: FileVi
               文件过大（&gt;1MB），不支持预览
             </div>
           )}
-          {result && !result.isBinary && !result.tooLarge && (
+          {result && !result.isBinary && !result.tooLarge && isMd && preview ? (
+            <div className="md-preview p-6 max-w-[860px] mx-auto">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {result.content}
+              </ReactMarkdown>
+            </div>
+          ) : result && !result.isBinary && !result.tooLarge && (
             <div className="font-mono text-sm leading-6">
               {result.content.split('\n').map((line, i) => (
                 <div key={i} className="flex hover:bg-[var(--border-subtle)]">
