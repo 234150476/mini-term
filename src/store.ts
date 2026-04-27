@@ -309,6 +309,10 @@ interface AppStore {
   renameGroup: (groupId: string, name: string) => void;
   toggleGroupCollapse: (groupId: string) => void;
   moveItem: (itemId: string, targetGroupId: string | null, index?: number) => void;
+
+  // 搜索弹窗
+  searchModalOpen: boolean;
+  setSearchModalOpen: (open: boolean) => void;
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -338,6 +342,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   projectStates: new Map(),
   notifications: [],
   markersByPty: new Map(),
+  searchModalOpen: false,
+  setSearchModalOpen: (open) => set({ searchModalOpen: open }),
 
   setActiveProject: (id) =>
     set((state) => {

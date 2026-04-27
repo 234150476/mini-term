@@ -263,6 +263,7 @@ function TreeNode({ entry, projectRoot, depth, gitStatusMap, onViewDiff, onViewF
 export function FileTree() {
   const activeProjectId = useAppStore((s) => s.activeProjectId);
   const config = useAppStore((s) => s.config);
+  const setSearchModalOpen = useAppStore((s) => s.setSearchModalOpen);
   const project = config.projects.find((p) => p.id === activeProjectId);
 
   const handleOpenInEditor = useCallback(async (editorName?: string) => {
@@ -415,6 +416,14 @@ export function FileTree() {
           Files — {project.name}
         </span>
         <div className="flex items-center flex-shrink-0 gap-1">
+          <button
+            type="button"
+            onClick={() => setSearchModalOpen(true)}
+            title="搜索文件 (Ctrl+Shift+F)"
+            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors text-sm leading-none px-1.5 py-0.5 rounded-[var(--radius-sm)] hover:bg-[var(--border-subtle)]"
+          >
+            ⌕
+          </button>
           <button
             type="button"
             onClick={() => {
