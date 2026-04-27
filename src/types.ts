@@ -123,6 +123,12 @@ export interface AiSession {
   timestamp: string; // ISO 8601
 }
 
+export interface AiSessionMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
 // === 文件树 ===
 
 export interface FileEntry {

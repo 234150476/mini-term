@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../store';
 import { showContextMenu } from '../utils/contextMenu';
+import { SessionViewerModal } from './SessionViewerModal';
 import type { AiSession } from '../types';
 
 /** 将 ISO 时间戳转换为简短的相对/绝对时间 */
@@ -42,6 +43,7 @@ export function SessionList() {
 
   const [sessions, setSessions] = useState<AiSession[]>([]);
   const [loading, setLoading] = useState(false);
+  const [viewingSession, setViewingSession] = useState<AiSession | null>(null);
 
   const activeProject = config.projects.find((p) => p.id === activeProjectId);
 
@@ -91,6 +93,13 @@ export function SessionList() {
           </div>
         )}
 
+        <SessionViewerModal
+          open={!!viewingSession}
+          onClose={() => setViewingSession(null)}
+          session={viewingSession}
+          projectPath={activeProject?.path ?? ''}
+        />
+
         {sessions.map((session) => {
           const badge = TYPE_BADGE[session.sessionType] ?? TYPE_BADGE.claude;
 
@@ -106,6 +115,11 @@ export function SessionList() {
                   ? `claude --resume ${session.id}`
                   : `codex resume ${session.id}`;
                 showContextMenu(e.clientX, e.clientY, [
+                  {
+                    label: '查看',
+                    onClick: () => setViewingSession(session),
+                  },
+                  { separator: true },
                   {
                     label: '复制恢复命令',
                     onClick: () => navigator.clipboard.writeText(cmd),

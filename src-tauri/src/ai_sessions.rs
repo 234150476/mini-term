@@ -368,6 +368,200 @@ fn try_read_codex_session(
     })
 }
 
+// ─── Session Content ──────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiSessionMessage {
+    pub role: String,
+    pub content: String,
+    pub timestamp: String,
+}
+
+fn extract_text_content(content_val: Option<&serde_json::Value>) -> String {
+    match content_val {
+        Some(serde_json::Value::String(s)) => s.clone(),
+        Some(serde_json::Value::Array(arr)) => {
+            let texts: Vec<String> = arr
+                .iter()
+                .filter_map(|item| {
+                    let t = item.get("type").and_then(|t| t.as_str())?;
+                    match t {
+                        "text" | "output_text" | "input_text" => {
+                            item.get("text").and_then(|t| t.as_str()).map(String::from)
+                        }
+                        _ => None,
+                    }
+                })
+                .collect();
+            texts.join("\n\n")
+        }
+        _ => String::new(),
+    }
+}
+
+fn read_claude_session_content(
+    session_id: &str,
+    project_path: &str,
+) -> Result<Vec<AiSessionMessage>, String> {
+    let home = home_dir().ok_or_else(|| "无法获取 home 目录".to_string())?;
+    let encoded = encode_project_path(project_path);
+    let path = home
+        .join(".claude")
+        .join("projects")
+        .join(&encoded)
+        .join(format!("{}.jsonl", session_id));
+
+    if !path.exists() {
+        return Err("会话文件不存在".to_string());
+    }
+
+    let file = fs::File::open(&path).map_err(|e| format!("无法打开文件: {}", e))?;
+    let reader = BufReader::new(file);
+    let mut messages = Vec::new();
+
+    for line in reader.lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+
+        let obj: serde_json::Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let role = match obj.get("type").and_then(|t| t.as_str()) {
+            Some("user") => "user",
+            Some("assistant") => "assistant",
+            _ => continue,
+        };
+
+        let content = extract_text_content(obj.pointer("/message/content"));
+        if content.is_empty() {
+            continue;
+        }
+
+        let timestamp = obj
+            .get("timestamp")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        messages.push(AiSessionMessage {
+            role: role.to_string(),
+            content,
+            timestamp,
+        });
+    }
+
+    Ok(messages)
+}
+
+fn is_codex_session_match(path: &Path, session_id: &str) -> bool {
+    let file = match fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => return false,
+    };
+    let reader = BufReader::new(file);
+    for line in reader.lines().take(5) {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+        let obj: serde_json::Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if obj.get("type").and_then(|t| t.as_str()) == Some("session_meta") {
+            if let Some(id) = obj.pointer("/payload/id").and_then(|v| v.as_str()) {
+                return id == session_id;
+            }
+        }
+    }
+    false
+}
+
+fn read_codex_session_content(
+    session_id: &str,
+    _project_path: &str,
+) -> Result<Vec<AiSessionMessage>, String> {
+    let home = home_dir().ok_or_else(|| "无法获取 home 目录".to_string())?;
+    let sessions_dir = home.join(".codex").join("sessions");
+
+    if !sessions_dir.exists() {
+        return Err("Codex sessions 目录不存在".to_string());
+    }
+
+    let mut paths = Vec::new();
+    collect_codex_session_paths(&sessions_dir, &mut paths);
+
+    let session_file = paths
+        .iter()
+        .find(|p| is_codex_session_match(p, session_id))
+        .ok_or_else(|| "未找到 Codex 会话文件".to_string())?
+        .clone();
+
+    let file = fs::File::open(&session_file).map_err(|e| format!("无法打开文件: {}", e))?;
+    let reader = BufReader::new(file);
+    let mut messages = Vec::new();
+
+    for line in reader.lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+
+        let obj: serde_json::Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        if obj.get("type").and_then(|t| t.as_str()) != Some("response_item") {
+            continue;
+        }
+
+        let role = match obj.pointer("/payload/role").and_then(|v| v.as_str()) {
+            Some("user") => "user",
+            Some("assistant") => "assistant",
+            _ => continue,
+        };
+
+        let content = extract_text_content(obj.pointer("/payload/content"));
+        if content.is_empty() {
+            continue;
+        }
+
+        let timestamp = obj
+            .pointer("/payload/timestamp")
+            .or_else(|| obj.get("timestamp"))
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        messages.push(AiSessionMessage {
+            role: role.to_string(),
+            content,
+            timestamp,
+        });
+    }
+
+    Ok(messages)
+}
+
+#[tauri::command]
+pub fn get_ai_session_content(
+    session_type: String,
+    session_id: String,
+    project_path: String,
+) -> Result<Vec<AiSessionMessage>, String> {
+    match session_type.as_str() {
+        "claude" => read_claude_session_content(&session_id, &project_path),
+        "codex" => read_codex_session_content(&session_id, &project_path),
+        _ => Err(format!("不支持的会话类型: {}", session_type)),
+    }
+}
+
 // ─── Tauri Command ─────────────────────────────────────────────
 
 #[tauri::command]

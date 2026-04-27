@@ -72,6 +72,7 @@ pub fn run() {
             fs::delete_entry,
             fs::filter_directories,
             ai_sessions::get_ai_sessions,
+            ai_sessions::get_ai_session_content,
             git::get_git_status,
             git::get_git_diff,
             git::discover_git_repos,
