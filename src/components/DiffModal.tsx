@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { Allotment } from 'allotment';
+import { useAppStore } from '../store';
 import type { GitFileStatus, GitDiffResult, DiffLine } from '../types';
 
 interface DiffModalProps {
@@ -14,9 +16,9 @@ type ViewMode = 'side-by-side' | 'inline';
 
 // ─── InlineView ───
 
-export function InlineView({ hunks }: { hunks: GitDiffResult['hunks'] }) {
+export function InlineView({ hunks, fontSize = 13 }: { hunks: GitDiffResult['hunks']; fontSize?: number }) {
   return (
-    <div className="font-mono text-sm leading-6">
+    <div className="font-mono" style={{ fontSize: `${fontSize}px`, lineHeight: `${Math.round(fontSize * 1.6)}px` }}>
       {hunks.map((hunk, hi) => (
         <div key={hi}>
           {hunk.lines.map((line, li) => (
@@ -30,7 +32,7 @@ export function InlineView({ hunks }: { hunks: GitDiffResult['hunks'] }) {
                   : ''
               }`}
             >
-              <span className="w-12 text-right pr-2 text-[var(--text-muted)] select-none flex-shrink-0 opacity-50">
+              <span className="w-[48px] text-right pr-2 text-[var(--text-muted)] select-none flex-shrink-0 opacity-50">
                 {line.kind === 'add' ? '+' : line.kind === 'delete' ? '-' : (line.oldLineno ?? '')}
               </span>
               <span
@@ -54,7 +56,7 @@ export function InlineView({ hunks }: { hunks: GitDiffResult['hunks'] }) {
 
 // ─── SideBySideView ───
 
-export function SideBySideView({ hunks }: { hunks: GitDiffResult['hunks'] }) {
+export function SideBySideView({ hunks, fontSize = 13 }: { hunks: GitDiffResult['hunks']; fontSize?: number }) {
   const rows: { left?: DiffLine; right?: DiffLine }[] = [];
 
   for (const hunk of hunks) {
@@ -95,7 +97,7 @@ export function SideBySideView({ hunks }: { hunks: GitDiffResult['hunks'] }) {
     if (!line) {
       return (
         <div className="flex h-full bg-[var(--bg-base)] opacity-30">
-          <span className="w-12 flex-shrink-0" />
+          <span className="w-[48px] flex-shrink-0" />
           <span className="flex-1" />
         </div>
       );
@@ -108,7 +110,7 @@ export function SideBySideView({ hunks }: { hunks: GitDiffResult['hunks'] }) {
           isAdd ? 'bg-[var(--diff-add-bg)]' : isDel ? 'bg-[var(--diff-del-bg)]' : ''
         }`}
       >
-        <span className="w-12 text-right pr-2 text-[var(--text-muted)] select-none flex-shrink-0 opacity-50">
+        <span className="w-[48px] text-right pr-2 text-[var(--text-muted)] select-none flex-shrink-0 opacity-50">
           {side === 'left' ? (line.oldLineno ?? '') : (line.newLineno ?? '')}
         </span>
         <span
@@ -122,18 +124,26 @@ export function SideBySideView({ hunks }: { hunks: GitDiffResult['hunks'] }) {
     );
   };
 
+  const lineHeight = Math.round(fontSize * 1.6);
+
   return (
-    <div className="flex font-mono text-sm leading-6 h-full">
-      <div className="flex-1 overflow-auto border-r border-[var(--border-subtle)]">
-        {rows.map((row, i) => (
-          <div key={i}>{renderCell(row.left, 'left')}</div>
-        ))}
-      </div>
-      <div className="flex-1 overflow-auto">
-        {rows.map((row, i) => (
-          <div key={i}>{renderCell(row.right, 'right')}</div>
-        ))}
-      </div>
+    <div className="font-mono h-full" style={{ fontSize: `${fontSize}px`, lineHeight: `${lineHeight}px` }}>
+      <Allotment>
+        <Allotment.Pane>
+          <div className="h-full overflow-auto">
+            {rows.map((row, i) => (
+              <div key={i}>{renderCell(row.left, 'left')}</div>
+            ))}
+          </div>
+        </Allotment.Pane>
+        <Allotment.Pane>
+          <div className="h-full overflow-auto">
+            {rows.map((row, i) => (
+              <div key={i}>{renderCell(row.right, 'right')}</div>
+            ))}
+          </div>
+        </Allotment.Pane>
+      </Allotment>
     </div>
   );
 }
@@ -145,6 +155,7 @@ export function DiffModal({ open, onClose, projectPath, status, staged }: DiffMo
   const [diffResult, setDiffResult] = useState<GitDiffResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const terminalFontSize = useAppStore((s) => s.config.terminalFontSize) || 14;
 
   useEffect(() => {
     if (!open) return;
@@ -250,8 +261,8 @@ export function DiffModal({ open, onClose, projectPath, status, staged }: DiffMo
           )}
           {diffResult && !diffResult.isBinary && !diffResult.tooLarge && (
             viewMode === 'side-by-side'
-              ? <SideBySideView hunks={diffResult.hunks} />
-              : <InlineView hunks={diffResult.hunks} />
+              ? <SideBySideView hunks={diffResult.hunks} fontSize={terminalFontSize} />
+              : <InlineView hunks={diffResult.hunks} fontSize={terminalFontSize} />
           )}
         </div>
       </div>

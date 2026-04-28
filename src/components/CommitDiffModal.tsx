@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { InlineView, SideBySideView } from './DiffModal';
+import { useAppStore } from '../store';
 import type { CommitFileInfo, GitDiffResult } from '../types';
 
 interface CommitDiffModalProps {
@@ -31,6 +32,7 @@ export function CommitDiffModal({
 }: CommitDiffModalProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('side-by-side');
   const [selectedFile, setSelectedFile] = useState<string>(files[0]?.path ?? '');
+  const terminalFontSize = useAppStore((s) => s.config.terminalFontSize) || 14;
   const [diffResult, setDiffResult] = useState<GitDiffResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -192,8 +194,8 @@ export function CommitDiffModal({
             )}
             {diffResult && !diffResult.isBinary && !diffResult.tooLarge && (
               viewMode === 'side-by-side'
-                ? <SideBySideView hunks={diffResult.hunks} />
-                : <InlineView hunks={diffResult.hunks} />
+                ? <SideBySideView hunks={diffResult.hunks} fontSize={terminalFontSize} />
+                : <InlineView hunks={diffResult.hunks} fontSize={terminalFontSize} />
             )}
             {!loading && !error && !diffResult && files.length === 0 && (
               <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
