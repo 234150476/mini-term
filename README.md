@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.3.4-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.3.5-blue" alt="version">
   <img src="https://img.shields.io/badge/platform-Windows-0078D4" alt="platform">
   <img src="https://img.shields.io/badge/macOS%20%7C%20Linux-experimental-lightgrey" alt="platform-experimental">
   <img src="https://img.shields.io/badge/Tauri-v2-orange" alt="tauri">
@@ -43,6 +43,7 @@ Mini-Term 用一个轻量桌面应用解决以上所有问题。
 - **高性能渲染** — xterm.js v6 + WebGL 加速，自动降级为 Canvas
 - **10 万行滚动缓冲** — 拦截 CSI 3J（ED3）指令，Claude / Codex 等 TUI 清屏时保留上滚历史
 - **终端缓存** — 切换项目 / 标签 / 分屏不重建 xterm 实例，已有内容不丢失；启动按需懒加载，仅当前可见 pane 创建 PTY，避免历史项目终端越多启动越卡
+- **项目切换缓存** — FileTree / GitHistory 数据按项目缓存，切回已访问项目零延迟渲染；目录加载与 Git 状态串行执行，避免线程池竞争
 - **复制粘贴** — `Ctrl+Shift+C` / `Ctrl+Shift+V` 快捷键 + 右键菜单，未选中时"复制"自动置灰；Windows 大段多行粘贴自动分块写入，防止 ConPTY 丢行
 - **长文本粘贴** — 剪贴板文本 ≥10 行或 ≥2000 字符时自动转存为临时 `.txt` 并粘贴带引号的文件路径，避免 AI 工具直接处理超长内容引发性能与 paste bracket 问题
 - **图片粘贴** — 剪贴板含截图时自动检测，通过 Win32 API 保存为临时 PNG 并粘贴带引号的路径，兼容 PinPix 等非标准格式
@@ -201,6 +202,7 @@ mini-term/
 │       ├── fileDragState.ts      # 文件拖拽到终端状态管理
 │       ├── projectTree.ts        # 项目树递归操作
 │       ├── terminalCache.ts      # xterm 缓存 + 复制粘贴
+│       ├── projectDataCache.ts   # FileTree / GitHistory 项目级数据缓存
 │       ├── themeManager.ts       # 主题切换 + 系统配色监听
 │       └── updateChecker.ts      # GitHub Release 版本检查
 ├── src-tauri/                    # Rust 后端
