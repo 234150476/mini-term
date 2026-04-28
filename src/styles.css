@@ -566,11 +566,6 @@ body.project-dragging {
 .md-preview img {
   max-width: 100%;
   border-radius: var(--radius-md);
-  vertical-align: middle;
-}
-
-.md-preview p > img:only-child {
-  display: block;
   margin: 0.8em 0;
 }
 

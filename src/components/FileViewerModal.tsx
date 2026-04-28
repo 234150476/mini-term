@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeRaw from 'rehype-raw';
 import type { FileContentResult } from '../types';
 
 interface FileViewerModalProps {
@@ -17,89 +16,25 @@ function isMarkdownFile(path: string) {
   return /\.(md|markdown|mkd|mdx)$/i.test(path);
 }
 
-function isLocalPath(src: string) {
-  return !/^(https?:|data:|blob:|asset:|#)/i.test(src);
-}
-
-async function resolveLocalImages(
-  content: string,
-  mdDir: string,
-  projectRoot: string,
-): Promise<string> {
-  const localPaths = new Map<string, string>();
-
-  const mdImgRe = /!\[([^\]]*)\]\(([^)]+)\)/g;
-  const htmlImgRe = /<img\s[^>]*?src=["']([^"']+)["']/gi;
-
-  for (const m of content.matchAll(mdImgRe)) {
-    const src = m[2];
-    if (isLocalPath(src)) localPaths.set(src, '');
-  }
-  for (const m of content.matchAll(htmlImgRe)) {
-    const src = m[1];
-    if (isLocalPath(src)) localPaths.set(src, '');
-  }
-
-  if (localPaths.size === 0) return content;
-
-  await Promise.all(
-    [...localPaths.keys()].map(async (src) => {
-      const resolved = src.startsWith('/')
-        ? src
-        : mdDir + '/' + src.replace(/^\.\//, '');
-      try {
-        const dataUri = await invoke<string>('read_image_base64', {
-          projectRoot,
-          path: resolved,
-        });
-        localPaths.set(src, dataUri);
-      } catch {
-        // leave original path
-      }
-    }),
-  );
-
-  let result = content;
-  for (const [src, dataUri] of localPaths) {
-    if (!dataUri) continue;
-    const escaped = src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    result = result.replace(new RegExp(escaped, 'g'), dataUri);
-  }
-  return result;
-}
-
 export function FileViewerModal({ open, onClose, filePath, projectRoot, highlightLine }: FileViewerModalProps) {
   const [result, setResult] = useState<FileContentResult | null>(null);
-  const [processedContent, setProcessedContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const isMd = useMemo(() => isMarkdownFile(filePath), [filePath]);
   const [preview, setPreview] = useState(true);
   const highlightRef = useRef<HTMLDivElement>(null);
 
-  const mdDir = useMemo(() => {
-    const normalized = filePath.replace(/\\/g, '/');
-    return normalized.substring(0, normalized.lastIndexOf('/'));
-  }, [filePath]);
-
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setError('');
     setResult(null);
-    setProcessedContent('');
 
     invoke<FileContentResult>('read_file_content', { projectRoot, path: filePath })
-      .then(async (res) => {
-        setResult(res);
-        if (res.content && isMarkdownFile(filePath) && !res.isBinary && !res.tooLarge) {
-          const processed = await resolveLocalImages(res.content, mdDir, projectRoot);
-          setProcessedContent(processed);
-        }
-      })
+      .then(setResult)
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [open, filePath, projectRoot, mdDir]);
+  }, [open, filePath, projectRoot]);
 
   useEffect(() => {
     if (!open) return;
@@ -198,8 +133,8 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
           )}
           {result && !result.isBinary && !result.tooLarge && isMd && preview ? (
             <div className="md-preview p-6 max-w-[860px] mx-auto">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                {processedContent || result.content}
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {result.content}
               </ReactMarkdown>
             </div>
           ) : result && !result.isBinary && !result.tooLarge && (
