@@ -4,6 +4,7 @@ import { ask } from '@tauri-apps/plugin-dialog';
 import { useAppStore } from '../store';
 import { useTauriEvent } from '../hooks/useTauriEvent';
 import { showContextMenu } from '../utils/contextMenu';
+import { isAiPty } from '../utils/terminalCache';
 import { DiffModal } from './DiffModal';
 import type { ChangeFileStatus, PtyOutputPayload } from '../types';
 
@@ -130,6 +131,7 @@ export function GitChanges({ projectPath: _projectPath, repoPath, onCommitSucces
     'pty-output',
     useCallback(
       (payload: PtyOutputPayload) => {
+        if (isAiPty(payload.ptyId)) return;
         if (GIT_REFRESH_PATTERNS.some((p) => p.test(payload.data))) {
           debouncedRefresh();
         }

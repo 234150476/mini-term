@@ -88,6 +88,29 @@ export function getTerminalTheme(terminalFollowTheme: boolean): typeof DARK_TERM
 }
 
 const cache = new Map<number, CachedEntry>();
+
+const aiPtyIds = new Set<number>();
+
+export function markAiPty(ptyId: number, isAi: boolean) {
+  if (isAi) aiPtyIds.add(ptyId);
+  else aiPtyIds.delete(ptyId);
+}
+
+export function isAiPty(ptyId: number): boolean {
+  return aiPtyIds.has(ptyId);
+}
+
+let globalPtyListenerInit = false;
+function ensureGlobalPtyOutputListener() {
+  if (globalPtyListenerInit) return;
+  globalPtyListenerInit = true;
+  listen<PtyOutputPayload>('pty-output', (event) => {
+    const entry = cache.get(event.payload.ptyId);
+    if (entry) {
+      entry.term.write(event.payload.data);
+    }
+  });
+}
 const enqueuePtyWrite = createPtyWriteQueue((ptyId, data, lineSnapshot) => {
   const payload = lineSnapshot === undefined
     ? { ptyId, data }
@@ -200,21 +223,10 @@ export function getOrCreateTerminal(ptyId: number): CachedTerminal {
     invoke('resize_pty', { ptyId, cols, rows });
   });
 
-  // PTY 输出 → 终端
-  let cancelled = false;
-  let unlisten: (() => void) | undefined;
-  listen<PtyOutputPayload>('pty-output', (event) => {
-    if (event.payload.ptyId === ptyId) {
-      term.write(event.payload.data);
-    }
-  }).then((fn) => {
-    if (cancelled) fn();
-    else unlisten = fn;
-  });
+  // PTY 输出由全局单一监听器分发（避免 N 个终端各自监听导致的 O(N) 事件广播开销）
+  ensureGlobalPtyOutputListener();
 
   const cleanup = () => {
-    cancelled = true;
-    unlisten?.();
     onDataDisp.dispose();
     onResizeDisp.dispose();
     term.dispose();
@@ -254,6 +266,7 @@ export function disposeTerminal(ptyId: number): void {
   entry.wrapper.remove();
   entry.cleanup();
   cache.delete(ptyId);
+  aiPtyIds.delete(ptyId);
   clearMarkerInstances(ptyId);
 }
 
