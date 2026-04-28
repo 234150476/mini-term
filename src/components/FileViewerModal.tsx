@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -24,6 +24,13 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
   const isMd = useMemo(() => isMarkdownFile(filePath), [filePath]);
   const [preview, setPreview] = useState(true);
   const highlightRef = useRef<HTMLDivElement>(null);
+
+  const resolveImgSrc = useCallback((src: string | undefined) => {
+    if (!src || /^(https?:|data:|blob:)/i.test(src)) return src;
+    const normalized = filePath.replace(/\\/g, '/');
+    const fileDir = normalized.substring(0, normalized.lastIndexOf('/'));
+    return convertFileSrc(fileDir + '/' + src);
+  }, [filePath]);
 
   useEffect(() => {
     if (!open) return;
@@ -134,7 +141,15 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
           )}
           {result && !result.isBinary && !result.tooLarge && isMd && preview ? (
             <div className="md-preview p-6 max-w-[860px] mx-auto">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
+                components={{
+                  img: ({ src, alt, ...props }) => (
+                    <img src={resolveImgSrc(src)} alt={alt ?? ''} {...props} />
+                  ),
+                }}
+              >
                 {result.content}
               </ReactMarkdown>
             </div>
