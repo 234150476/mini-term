@@ -11,6 +11,7 @@ import { isAiPty } from '../utils/terminalCache';
 import { DiffModal } from './DiffModal';
 import { FileViewerModal } from './FileViewerModal';
 import { initFileDrag } from '../utils/fileDragState';
+import { getFileTreeCache, setFileTreeCache } from '../utils/projectDataCache';
 import type { FileEntry, FsChangePayload, GitFileStatus, PtyOutputPayload } from '../types';
 
 interface TreeNodeProps {
@@ -289,10 +290,20 @@ export function FileTree() {
     handleOpenInEditor(editorName);
   }, [config, handleOpenInEditor]);
 
-  const [rootEntries, setRootEntries] = useState<FileEntry[]>([]);
-  const [gitStatusMap, setGitStatusMap] = useState<Map<string, GitFileStatus>>(new Map());
+  const [rootEntries, setRootEntries] = useState<FileEntry[]>(() => {
+    return (project ? getFileTreeCache(project.path) : undefined)?.rootEntries ?? [];
+  });
+  const [gitStatusMap, setGitStatusMap] = useState<Map<string, GitFileStatus>>(() => {
+    return (project ? getFileTreeCache(project.path) : undefined)?.gitStatusMap ?? new Map();
+  });
+  const [loading, setLoading] = useState(() => !project || !getFileTreeCache(project.path));
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [diffTarget, setDiffTarget] = useState<GitFileStatus | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rootEntriesRef = useRef(rootEntries);
+  rootEntriesRef.current = rootEntries;
+  const gitStatusMapRef = useRef(gitStatusMap);
+  gitStatusMapRef.current = gitStatusMap;
 
   const loadGitStatus = useCallback(() => {
     if (!project) return;
@@ -301,13 +312,14 @@ export function FileTree() {
         const map = new Map<string, GitFileStatus>();
         for (const s of statuses) map.set(s.path, s);
         setGitStatusMap(map);
+        gitStatusMapRef.current = map;
+        setFileTreeCache(project.path, {
+          rootEntries: rootEntriesRef.current,
+          gitStatusMap: map,
+        });
       })
       .catch(() => setGitStatusMap(new Map()));
   }, [project?.path]);
-
-  useEffect(() => {
-    loadGitStatus();
-  }, [loadGitStatus]);
 
   const debouncedRefresh = useCallback(() => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
@@ -316,21 +328,77 @@ export function FileTree() {
 
   const loadRootEntries = useCallback(() => {
     if (!project) return;
+    const projectPath = project.path;
+    setLoadError(null);
+    if (rootEntriesRef.current.length === 0) setLoading(true);
     invoke<FileEntry[]>('list_directory', {
-      projectRoot: project.path,
-      path: project.path,
-    }).then(setRootEntries);
+      projectRoot: projectPath,
+      path: projectPath,
+    }).then((entries) => {
+      setRootEntries(entries);
+      rootEntriesRef.current = entries;
+      setLoading(false);
+      setLoadError(null);
+      setFileTreeCache(project.path, {
+        rootEntries: entries,
+        gitStatusMap: gitStatusMapRef.current,
+      });
+    }).catch((err) => {
+      setLoading(false);
+      setLoadError(typeof err === 'string' ? err : String(err));
+    });
   }, [project?.path]);
 
   useEffect(() => {
     if (!project) {
       setRootEntries([]);
+      setLoading(false);
+      setLoadError(null);
       return;
     }
-    loadRootEntries();
-    invoke('watch_directory', { path: project.path, projectPath: project.path });
-    return () => { invoke('unwatch_directory', { path: project.path }); };
-  }, [project?.path, loadRootEntries]);
+    let cancelled = false;
+    const projectPath = project.path;
+    const cached = getFileTreeCache(projectPath);
+    setLoading(!cached);
+    setLoadError(null);
+    invoke<FileEntry[]>('list_directory', {
+      projectRoot: projectPath,
+      path: projectPath,
+    }).then((entries) => {
+      if (cancelled) return;
+      setRootEntries(entries);
+      rootEntriesRef.current = entries;
+      setLoading(false);
+      setFileTreeCache(projectPath, {
+        rootEntries: entries,
+        gitStatusMap: gitStatusMapRef.current,
+      });
+      invoke<GitFileStatus[]>('get_git_status', { projectPath })
+        .then((statuses) => {
+          if (cancelled) return;
+          const map = new Map<string, GitFileStatus>();
+          for (const s of statuses) map.set(s.path, s);
+          setGitStatusMap(map);
+          gitStatusMapRef.current = map;
+          setFileTreeCache(projectPath, {
+            rootEntries: rootEntriesRef.current,
+            gitStatusMap: map,
+          });
+        })
+        .catch(() => {
+          if (!cancelled) setGitStatusMap(new Map());
+        });
+    }).catch((err) => {
+      if (cancelled) return;
+      setLoading(false);
+      setLoadError(typeof err === 'string' ? err : String(err));
+    });
+    invoke('watch_directory', { path: projectPath, projectPath });
+    return () => {
+      cancelled = true;
+      invoke('unwatch_directory', { path: projectPath });
+    };
+  }, [project?.path]);
 
   useTauriEvent<FsChangePayload>('fs-change', useCallback((payload: FsChangePayload) => {
     if (!project) return;
@@ -465,17 +533,43 @@ export function FileTree() {
         </div>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-1" onContextMenu={handleRootContextMenu}>
-        {rootEntries.map((entry) => (
-          <TreeNode
-            key={entry.path}
-            entry={entry}
-            projectRoot={project.path}
-            depth={0}
-            gitStatusMap={gitStatusMap}
-            onViewDiff={handleViewDiff}
-            onViewFile={handleViewFile}
-          />
-        ))}
+        {loading && rootEntries.length === 0 ? (
+          <div className="flex items-center justify-center py-8 text-[var(--text-muted)] text-sm">
+            加载中...
+          </div>
+        ) : loadError && rootEntries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-8 px-3 text-center text-sm">
+            <div className="text-[var(--text-muted)] truncate max-w-full" title={loadError}>
+              文件列表加载失败
+            </div>
+            <button
+              type="button"
+              onClick={loadRootEntries}
+              className="px-2 py-1 rounded-[var(--radius-sm)] text-[var(--accent)] hover:bg-[var(--border-subtle)] transition-colors"
+            >
+              重试
+            </button>
+          </div>
+        ) : (
+          <>
+            {loadError && (
+              <div className="px-2 py-1 text-xs text-[var(--text-muted)] truncate" title={loadError}>
+                文件列表刷新失败，已保留缓存
+              </div>
+            )}
+            {rootEntries.map((entry) => (
+              <TreeNode
+                key={entry.path}
+                entry={entry}
+                projectRoot={project.path}
+                depth={0}
+                gitStatusMap={gitStatusMap}
+                onViewDiff={handleViewDiff}
+                onViewFile={handleViewFile}
+              />
+            ))}
+          </>
+        )}
       </div>
       {viewFilePath && project && (
         <FileViewerModal

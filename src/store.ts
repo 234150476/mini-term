@@ -28,6 +28,7 @@ import {
   removeProjectFromTree,
   migrateToTree,
 } from './utils/projectTree';
+import { clearProjectCache } from './utils/projectDataCache';
 
 // 生成唯一 ID
 let idCounter = 0;
@@ -382,6 +383,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   removeProject: (id) => {
     set((state) => {
       // 非纯状态副作用:清理运行时 Map / timer(不参与 zustand 状态)
+      const removingProject = state.config.projects.find((p) => p.id === id);
+      if (removingProject) {
+        clearProjectCache(removingProject.path);
+      }
       expandedDirsMap.delete(id);
       const timer = saveExpandedTimers.get(id);
       if (timer) { clearTimeout(timer); saveExpandedTimers.delete(id); }

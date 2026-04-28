@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../store';
 import { GitHistoryContent } from './GitHistoryContent';
 import { GitChanges } from './GitChanges';
+import { getGitHistoryCache, setGitHistoryCache } from '../utils/projectDataCache';
 import type { GitRepoInfo } from '../types';
 
 type GitTab = 'history' | 'changes';
@@ -15,8 +16,12 @@ export function GitHistory() {
   const [activeTab, setActiveTab] = useState<GitTab>('history');
 
   // 仓库选择器状态 — 提升到容器层，两个 tab 共享
-  const [repos, setRepos] = useState<GitRepoInfo[]>([]);
-  const [selectedRepo, setSelectedRepo] = useState<string>('');
+  const [repos, setRepos] = useState<GitRepoInfo[]>(() => {
+    return (project ? getGitHistoryCache(project.path) : undefined)?.repos ?? [];
+  });
+  const [selectedRepo, setSelectedRepo] = useState<string>(() => {
+    return (project ? getGitHistoryCache(project.path) : undefined)?.selectedRepo ?? '';
+  });
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -25,10 +30,12 @@ export function GitHistory() {
     invoke<GitRepoInfo[]>('discover_git_repos', { projectPath: project.path })
       .then((r) => {
         setRepos(r);
+        let nextRepo = '';
         setSelectedRepo((prev) => {
-          if (prev && r.some((repo) => repo.path === prev)) return prev;
-          return r.length > 0 ? r[0].path : '';
+          nextRepo = (prev && r.some((repo) => repo.path === prev)) ? prev : (r[0]?.path ?? '');
+          return nextRepo;
         });
+        setGitHistoryCache(project.path, { repos: r, selectedRepo: nextRepo });
       })
       .catch(() => setRepos([]));
   }, [project?.path]);
