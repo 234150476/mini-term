@@ -404,8 +404,8 @@ export function FileTree() {
   }
 
   return (
-    <div className="h-full bg-[var(--bg-surface)] flex flex-col overflow-y-auto border-l border-[var(--border-subtle)] select-none">
-      <div className="px-3 pt-3 pb-1.5 flex items-center justify-between gap-2">
+    <div className="h-full bg-[var(--bg-surface)] flex flex-col border-l border-[var(--border-subtle)] select-none">
+      <div className="px-3 pt-3 pb-1.5 flex items-center justify-between gap-2 flex-shrink-0">
         <span className="text-sm text-[var(--text-muted)] uppercase tracking-[0.12em] font-medium truncate">
           Files — {project.name}
         </span>
@@ -462,7 +462,7 @@ export function FileTree() {
           )}
         </div>
       </div>
-      <div className="flex-1 px-1" onContextMenu={handleRootContextMenu}>
+      <div className="flex-1 min-h-0 overflow-y-auto px-1" onContextMenu={handleRootContextMenu}>
         {rootEntries.map((entry) => (
           <TreeNode
             key={entry.path}
