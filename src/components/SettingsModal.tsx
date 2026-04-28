@@ -4,6 +4,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useAppStore } from '../store';
+import { playNotificationSound } from '../utils/notificationSound';
 import { checkForUpdate, compareVersions, type ReleaseInfo } from '../utils/updateChecker';
 import { applyTheme } from '../utils/themeManager';
 import { updateAllTerminalThemes } from '../utils/terminalCache';
@@ -655,6 +656,36 @@ function SystemSettings() {
     invoke('save_config', { config: newConfig });
   }, [setConfig]);
 
+  const handleAiCompletionSoundChange = useCallback((enabled: boolean) => {
+    const newConfig = { ...useAppStore.getState().config, aiCompletionSound: enabled };
+    setConfig(newConfig);
+    invoke('save_config', { config: newConfig });
+  }, [setConfig]);
+
+  const handleAiCompletionSoundPathChange = useCallback(async () => {
+    const selected = await openDialog({
+      title: '选择提示音文件',
+      multiple: false,
+      directory: false,
+      filters: [{ name: '音频文件', extensions: ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'] }],
+    });
+    if (typeof selected === 'string' && selected.trim()) {
+      const newConfig = { ...useAppStore.getState().config, aiCompletionSoundPath: selected };
+      setConfig(newConfig);
+      invoke('save_config', { config: newConfig });
+    }
+  }, [setConfig]);
+
+  const handleClearSoundPath = useCallback(() => {
+    const newConfig = { ...useAppStore.getState().config, aiCompletionSoundPath: undefined };
+    setConfig(newConfig);
+    invoke('save_config', { config: newConfig });
+  }, [setConfig]);
+
+  const handleTestSound = useCallback(() => {
+    playNotificationSound(useAppStore.getState().config.aiCompletionSoundPath);
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* 主题模式 */}
@@ -702,14 +733,18 @@ function SystemSettings() {
         </button>
       </div>
 
-      {/* AI 完成弹框提醒 */}
-      <div className="flex items-center justify-between px-3 py-2.5 rounded-[var(--radius-md)] bg-[var(--bg-base)] border border-[var(--border-subtle)] mb-3">
+      {/* AI 完成通知 */}
+      <div className="text-base text-[var(--text-muted)] uppercase tracking-[0.1em] mb-2">
+        AI 完成通知
+      </div>
+
+      <div className="flex items-center justify-between px-3 py-2.5 rounded-[var(--radius-md)] bg-[var(--bg-base)] border border-[var(--border-subtle)]">
         <div>
-          <div className="text-base text-[var(--text-primary)]">AI 完成弹框提醒</div>
+          <div className="text-base text-[var(--text-primary)]">弹框提醒</div>
           <div className="text-sm text-[var(--text-muted)]">AI 任务结束时在右下角弹出提醒卡片</div>
         </div>
         <button
-          className={`relative w-9 h-5 rounded-full transition-colors ${
+          className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
             config.aiCompletionPopup ? 'bg-[var(--accent)]' : 'bg-[var(--border-strong)]'
           }`}
           onClick={() => handleAiCompletionPopupChange(!config.aiCompletionPopup)}
@@ -722,14 +757,13 @@ function SystemSettings() {
         </button>
       </div>
 
-      {/* AI 完成任务栏闪烁 */}
-      <div className="flex items-center justify-between px-3 py-2.5 rounded-[var(--radius-md)] bg-[var(--bg-base)] border border-[var(--border-subtle)] mb-6">
+      <div className="flex items-center justify-between px-3 py-2.5 rounded-[var(--radius-md)] bg-[var(--bg-base)] border border-[var(--border-subtle)]">
         <div>
-          <div className="text-base text-[var(--text-primary)]">AI 完成任务栏闪烁</div>
-          <div className="text-sm text-[var(--text-muted)]">AI 任务结束且窗口失焦时请求用户注意（Windows 闪烁任务栏，macOS 跳动 Dock）</div>
+          <div className="text-base text-[var(--text-primary)]">任务栏闪烁</div>
+          <div className="text-sm text-[var(--text-muted)]">窗口失焦时请求用户注意（Windows 闪烁任务栏，macOS 跳动 Dock）</div>
         </div>
         <button
-          className={`relative w-9 h-5 rounded-full transition-colors ${
+          className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
             config.aiCompletionTaskbarFlash ? 'bg-[var(--accent)]' : 'bg-[var(--border-strong)]'
           }`}
           onClick={() => handleAiCompletionTaskbarFlashChange(!config.aiCompletionTaskbarFlash)}
@@ -740,6 +774,67 @@ function SystemSettings() {
             }`}
           />
         </button>
+      </div>
+
+      <div className="flex items-center justify-between px-3 py-2.5 rounded-[var(--radius-md)] bg-[var(--bg-base)] border border-[var(--border-subtle)]">
+        <div>
+          <div className="text-base text-[var(--text-primary)]">提示音</div>
+          <div className="text-sm text-[var(--text-muted)]">AI 任务结束时播放提示音</div>
+        </div>
+        <button
+          className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
+            config.aiCompletionSound ? 'bg-[var(--accent)]' : 'bg-[var(--border-strong)]'
+          }`}
+          onClick={() => handleAiCompletionSoundChange(!config.aiCompletionSound)}
+        >
+          <span
+            className={`absolute top-0.5 left-0 w-4 h-4 rounded-full bg-white transition-transform ${
+              config.aiCompletionSound ? 'translate-x-[18px]' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </div>
+
+      <div
+        className={`space-y-2 transition-opacity ${
+          config.aiCompletionSound ? '' : 'opacity-50 pointer-events-none'
+        }`}
+      >
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-[var(--radius-md)] bg-[var(--bg-base)] border border-[var(--border-subtle)]">
+          <div className="flex-1 min-w-0">
+            <div className="text-base text-[var(--text-primary)]">自定义提示音</div>
+            <div className="text-sm text-[var(--text-muted)] font-mono truncate">
+              {config.aiCompletionSoundPath || '默认提示音'}
+            </div>
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              className="px-2.5 py-1 text-sm bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-default)] rounded-[var(--radius-sm)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all"
+              onClick={handleTestSound}
+              title="试听"
+            >
+              试听
+            </button>
+            <button
+              className="px-2.5 py-1 text-sm bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-default)] rounded-[var(--radius-sm)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all"
+              onClick={handleAiCompletionSoundPathChange}
+            >
+              选择文件
+            </button>
+            {config.aiCompletionSoundPath && (
+              <button
+                className="px-2.5 py-1 text-sm text-[var(--text-muted)] hover:text-[var(--color-error)] transition-colors"
+                onClick={handleClearSoundPath}
+              >
+                清除
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-1 mb-6 text-sm text-[var(--text-muted)]">
+        以上通知在 AI 任务（Claude / Codex）完成时触发
       </div>
 
       {/* 外部编辑器 */}

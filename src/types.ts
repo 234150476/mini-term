@@ -25,6 +25,8 @@ export interface AppConfig {
   terminalFollowTheme: boolean;
   aiCompletionPopup: boolean;
   aiCompletionTaskbarFlash: boolean;
+  aiCompletionSound: boolean;
+  aiCompletionSoundPath?: string;
   editors: EditorConfig[];
   defaultEditor?: string;
   gitChangesViewMode: 'list' | 'tree';

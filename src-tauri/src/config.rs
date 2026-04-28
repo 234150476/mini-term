@@ -62,6 +62,10 @@ pub struct AppConfig {
     pub ai_completion_popup: bool,
     #[serde(default = "default_ai_completion_taskbar_flash")]
     pub ai_completion_taskbar_flash: bool,
+    #[serde(default = "default_true")]
+    pub ai_completion_sound: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ai_completion_sound_path: Option<String>,
     #[serde(default)]
     pub editors: Vec<EditorConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -203,6 +207,8 @@ impl Default for AppConfig {
             terminal_follow_theme: default_terminal_follow_theme(),
             ai_completion_popup: default_ai_completion_popup(),
             ai_completion_taskbar_flash: default_ai_completion_taskbar_flash(),
+            ai_completion_sound: true,
+            ai_completion_sound_path: None,
             editors: vec![],
             default_editor: None,
             vscode_path: None,

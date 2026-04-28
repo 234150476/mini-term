@@ -18,6 +18,7 @@ import type {
   AiUserSubmitPayload,
 } from './types';
 import { restoreSavedProjectLayout } from './utils/layoutRestore';
+import { playNotificationSound } from './utils/notificationSound';
 import {
   deepCloneTree,
   removeFromTree,
@@ -326,6 +327,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     terminalFollowTheme: true,
     aiCompletionPopup: true,
     aiCompletionTaskbarFlash: true,
+    aiCompletionSound: true,
     editors: [],
     gitChangesViewMode: 'list',
     longPasteToFile: true,
@@ -532,7 +534,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
       // 3. 检测 transition：ai-working → ai-idle
       const isCompletion = oldStatus === 'ai-working' && status === 'ai-idle';
       if (isCompletion) {
-        // 3a. 任务栏闪烁 — 不区分激活项目（Tauri API 自带 focus 检测）
+        // 3a. 提示音 — 不区分激活项目
+        if (state.config.aiCompletionSound) {
+          queueMicrotask(() => {
+            playNotificationSound(state.config.aiCompletionSoundPath);
+          });
+        }
+
+        // 3b. 任务栏闪烁 — 不区分激活项目（Tauri API 自带 focus 检测）
         if (state.config.aiCompletionTaskbarFlash) {
           queueMicrotask(() => {
             getCurrentWindow()
@@ -541,7 +550,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           });
         }
 
-        // 3b. Tag + Toast — 仅非激活项目
+        // 3c. Tag + Toast — 仅非激活项目
         if (owningProjectId !== state.activeProjectId) {
           const ps = newStates.get(owningProjectId);
           if (ps && !ps.needsAttention) {
