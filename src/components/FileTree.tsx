@@ -58,13 +58,7 @@ function TreeNode({ entry, projectRoot, depth, gitStatusMap, onViewDiff, onViewF
 
   const handleToggle = useCallback(async () => {
     if (!entry.isDir) {
-      const rel = getRelativePath(entry.path, projectRoot).replace(/\\/g, '/');
-      const fileStatus = gitStatusMap.get(rel);
-      if (fileStatus) {
-        onViewDiff(fileStatus);
-      } else {
-        onViewFile(entry.path);
-      }
+      onViewFile(entry.path);
       return;
     }
     const next = !expanded;
