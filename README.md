@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.3.1-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.3.2-blue" alt="version">
   <img src="https://img.shields.io/badge/platform-Windows-0078D4" alt="platform">
   <img src="https://img.shields.io/badge/macOS%20%7C%20Linux-experimental-lightgrey" alt="platform-experimental">
   <img src="https://img.shields.io/badge/Tauri-v2-orange" alt="tauri">
@@ -83,7 +83,7 @@ Mini-Term 用一个轻量桌面应用解决以上所有问题。
 ### Git 集成
 
 - **文件状态** — 文件树显示 Git 状态颜色（修改 / 新增 / 删除 / 冲突）
-- **变更 Diff** — 工作区文件变更的详细 Diff，Hunk 行级解析，并排 / 内联双视图
+- **变更 Diff** — 工作区文件变更的详细 Diff，Hunk 行级解析，并排 / 内联双视图，并排模式支持拖拽调节分隔比例，字号跟随终端字体设置
 - **提交历史** — 浏览仓库提交记录，游标分页加载（默认 30 条）
 - **提交 Diff** — 查看任意提交的文件变更，逐文件切换
 - **分支信息** — 本地 / 远程分支列表
