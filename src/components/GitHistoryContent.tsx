@@ -405,11 +405,12 @@ export function GitHistoryContent({ projectPath, repos, refreshRepos }: GitHisto
       const repo = node.repo;
       const isExpanded = expandedRepos.has(repo.path);
       const state = repoStates.get(repo.path);
+      const dropdownOpen = branchDropdownOpen === repo.path;
       return (
         <div key={repo.path}>
           <div
             className="sticky bg-[var(--bg-surface)] h-[30px] flex items-center"
-            style={{ top: `${depth * 30}px`, zIndex: 10 - depth }}
+            style={{ top: `${depth * 30}px`, zIndex: dropdownOpen ? 50 : 10 - depth }}
           >
             <div
               className="group flex items-center justify-between w-full py-[5px] cursor-pointer hover:bg-[var(--border-subtle)] rounded-[var(--radius-sm)] text-base transition-colors duration-100 text-[var(--color-folder)]"
@@ -431,7 +432,6 @@ export function GitHistoryContent({ projectPath, repos, refreshRepos }: GitHisto
                   const viewing = viewBranches.get(repo.path);
                   const displayBranch = viewing ?? repo.currentBranch;
                   const isViewingOther = viewing !== undefined && viewing !== repo.currentBranch;
-                  const dropdownOpen = branchDropdownOpen === repo.path;
                   const allBranches = repoBranches.get(repo.path) ?? [];
                   return (
                     <div
