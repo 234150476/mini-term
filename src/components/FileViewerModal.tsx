@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import type { Components } from 'react-markdown';
 import type { FileContentResult } from '../types';
 
@@ -152,7 +153,7 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
           )}
           {result && !result.isBinary && !result.tooLarge && isMd && preview ? (
             <div className="md-preview p-6 max-w-[860px] mx-auto">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={mdComponents}>
                 {result.content}
               </ReactMarkdown>
             </div>
