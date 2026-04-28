@@ -5,7 +5,7 @@
   "identifier": "com.mini-term.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:1450",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: asset: https://asset.localhost; media-src 'self' asset: https://asset.localhost; connect-src 'self' ipc: http://ipc.localhost https://api.github.com http://localhost:1420 ws://localhost:1420; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: asset: https://asset.localhost https: http:; media-src 'self' asset: https://asset.localhost; connect-src 'self' ipc: http://ipc.localhost https://api.github.com http://localhost:1450 ws://localhost:1450; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'"
     }
   },
   "bundle": {
