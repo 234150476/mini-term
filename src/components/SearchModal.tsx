@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { useAppStore } from '../store';
 import { useTauriEvent } from '../hooks/useTauriEvent';
 import { FileViewerModal } from './FileViewerModal';
+import { showContextMenu } from '../utils/contextMenu';
 import type { SearchResultItem, SearchResultsPayload, SearchCompletePayload } from '../types';
 
 // ── Keyword highlight helper ──
@@ -32,10 +34,12 @@ function HighlightText({ text, ranges }: { text: string; ranges: [number, number
 
 function ContentResults({
   results,
+  projectRoot,
   onResultClick,
   onResultDoubleClick,
 }: {
   results: SearchResultItem[];
+  projectRoot: string;
   onResultClick: (item: SearchResultItem) => void;
   onResultDoubleClick: (item: SearchResultItem) => void;
 }) {
@@ -46,11 +50,23 @@ function ContentResults({
     grouped.set(item.filePath, group);
   }
 
+  const sep = projectRoot.includes('\\') ? '\\' : '/';
+  const handleContextMenu = (e: React.MouseEvent, item: SearchResultItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    showContextMenu(e.clientX, e.clientY, [
+      { label: '复制文件地址', onClick: () => writeText(projectRoot + sep + item.filePath) },
+    ]);
+  };
+
   return (
     <>
       {Array.from(grouped.entries()).map(([filePath, items]) => (
         <div key={filePath}>
-          <div className="px-4 py-1.5 text-xs text-[var(--accent)] bg-[var(--bg-elevated)] font-medium sticky top-0 z-10 flex items-center gap-2">
+          <div
+            className="px-4 py-1.5 text-xs text-[var(--accent)] bg-[var(--bg-elevated)] font-medium sticky top-0 z-10 flex items-center gap-2"
+            onContextMenu={(e) => handleContextMenu(e, items[0])}
+          >
             <span>{items[0].fileName}</span>
             <span className="text-[var(--text-muted)] truncate">{filePath}</span>
             <span className="text-[var(--text-muted)]">({items.length})</span>
@@ -61,6 +77,7 @@ function ContentResults({
               className="flex items-center gap-2 px-4 py-1 cursor-pointer hover:bg-[var(--border-subtle)] transition-colors font-mono text-xs"
               onClick={() => onResultClick(item)}
               onDoubleClick={() => onResultDoubleClick(item)}
+              onContextMenu={(e) => handleContextMenu(e, item)}
             >
               <span className="w-10 text-right text-[var(--text-muted)] flex-shrink-0 select-none">
                 {item.lineNumber}
@@ -288,21 +305,31 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
           {results.length > 0 && (
             <div className="divide-y divide-[var(--border-subtle)]">
               {mode === 'filename'
-                ? results.map((item, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 px-4 py-1.5 cursor-pointer hover:bg-[var(--border-subtle)] transition-colors"
-                      onClick={() => handleResultClick(item)}
-                      onDoubleClick={() => handleResultDoubleClick(item)}
-                    >
-                      <span className="text-sm text-[var(--text-primary)]">
-                        <HighlightText text={item.fileName} ranges={item.matchRanges} />
-                      </span>
-                      <span className="text-xs text-[var(--text-muted)] truncate">{item.filePath}</span>
-                    </div>
-                  ))
+                ? (() => {
+                    const sep = project!.path.includes('\\') ? '\\' : '/';
+                    return results.map((item, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 px-4 py-1.5 cursor-pointer hover:bg-[var(--border-subtle)] transition-colors"
+                        onClick={() => handleResultClick(item)}
+                        onDoubleClick={() => handleResultDoubleClick(item)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          showContextMenu(e.clientX, e.clientY, [
+                            { label: '复制文件地址', onClick: () => writeText(project!.path + sep + item.filePath) },
+                          ]);
+                        }}
+                      >
+                        <span className="text-sm text-[var(--text-primary)]">
+                          <HighlightText text={item.fileName} ranges={item.matchRanges} />
+                        </span>
+                        <span className="text-xs text-[var(--text-muted)] truncate">{item.filePath}</span>
+                      </div>
+                    ));
+                  })()
                 : (
-                    <ContentResults results={results} onResultClick={handleResultClick} onResultDoubleClick={handleResultDoubleClick} />
+                    <ContentResults results={results} projectRoot={project!.path} onResultClick={handleResultClick} onResultDoubleClick={handleResultDoubleClick} />
                   )}
             </div>
           )}
