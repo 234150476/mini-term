@@ -1,3 +1,4 @@
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use ignore::gitignore::Gitignore;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event as NotifyEvent};
 use serde::Serialize;
@@ -252,6 +253,32 @@ pub fn read_file_content(project_root: String, path: String) -> Result<FileConte
         Ok(s) => Ok(FileContentResult { content: s, is_binary: false, too_large: false }),
         Err(_) => Ok(FileContentResult { content: String::new(), is_binary: true, too_large: false }),
     }
+}
+
+const MAX_IMAGE_SIZE: u64 = 10_485_760; // 10MB
+
+#[tauri::command]
+pub fn read_image_base64(project_root: String, path: String) -> Result<String, String> {
+    let p = verify_under_project_root(&project_root, &path, true)?;
+    if !p.is_file() {
+        return Err(format!("不是文件: {}", path));
+    }
+    let metadata = fs::metadata(&p).map_err(|e| e.to_string())?;
+    if metadata.len() > MAX_IMAGE_SIZE {
+        return Err("图片文件过大".into());
+    }
+    let bytes = fs::read(&p).map_err(|e| e.to_string())?;
+    let mime = match p.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).as_deref() {
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("svg") => "image/svg+xml",
+        Some("webp") => "image/webp",
+        Some("ico") => "image/x-icon",
+        Some("bmp") => "image/bmp",
+        _ => "application/octet-stream",
+    };
+    Ok(format!("data:{};base64,{}", mime, BASE64.encode(&bytes)))
 }
 
 #[tauri::command]

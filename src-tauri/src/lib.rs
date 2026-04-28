@@ -70,6 +70,7 @@ pub fn run() {
             fs::create_file,
             fs::create_directory,
             fs::read_file_content,
+            fs::read_image_base64,
             fs::rename_entry,
             fs::delete_entry,
             fs::filter_directories,
