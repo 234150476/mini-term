@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import type { Components } from 'react-markdown';
 import type { FileContentResult } from '../types';
 
 interface FileViewerModalProps {
@@ -23,6 +24,24 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
   const isMd = useMemo(() => isMarkdownFile(filePath), [filePath]);
   const [preview, setPreview] = useState(true);
   const highlightRef = useRef<HTMLDivElement>(null);
+
+  const mdDir = useMemo(() => {
+    const normalized = filePath.replace(/\\/g, '/');
+    return normalized.substring(0, normalized.lastIndexOf('/'));
+  }, [filePath]);
+
+  const mdComponents = useMemo<Components>(() => ({
+    img: ({ src, alt, ...props }) => {
+      if (!src) return <img alt={alt} {...props} />;
+      if (/^(https?:|data:|blob:|asset:)/i.test(src)) {
+        return <img src={src} alt={alt} {...props} />;
+      }
+      const resolved = src.startsWith('/')
+        ? src
+        : mdDir + '/' + src.replace(/^\.\//, '');
+      return <img src={convertFileSrc(resolved)} alt={alt} {...props} />;
+    },
+  }), [mdDir]);
 
   useEffect(() => {
     if (!open) return;
@@ -133,7 +152,7 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
           )}
           {result && !result.isBinary && !result.tooLarge && isMd && preview ? (
             <div className="md-preview p-6 max-w-[860px] mx-auto">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                 {result.content}
               </ReactMarkdown>
             </div>
