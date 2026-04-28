@@ -383,11 +383,7 @@ impl PtyManager {
         }
     }
 
-    /// 追踪用户输入，检测 AI 命令（claude/codex）的执行与退出
-    ///
-    /// 进入 AI 会话：在 shell 中输入 claude/codex + Enter
-    /// 退出 AI 会话：Ctrl+D（EOF）、或输入退出命令（/exit /quit exit quit :quit /logout）
-    /// 注意：Ctrl+C 在 AI 会话中是取消当前任务，不是退出会话
+    #[cfg(test)]
     pub fn track_input(&self, pty_id: u32, data: &str) {
         self.track_input_with_line_snapshot(pty_id, data, None);
     }
