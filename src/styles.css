@@ -634,3 +634,43 @@ body.project-dragging {
 [data-skin="blueprint"] #root::before {
   opacity: 0;
 }
+
+:root[data-skin="blueprint"][data-theme="light"] {
+  --bg-base: #f0f4f8;
+  --bg-surface: #e8eef4;
+  --bg-elevated: #dce4ed;
+  --bg-overlay: #d0dae6;
+  --bg-terminal: #f5f8fb;
+
+  --accent: #0e7490;
+  --accent-muted: rgba(14, 116, 144, 0.15);
+  --accent-subtle: rgba(14, 116, 144, 0.06);
+
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: rgba(14, 116, 144, 0.5);
+
+  --border-subtle: rgba(14, 116, 144, 0.08);
+  --border-default: rgba(14, 116, 144, 0.15);
+  --border-strong: rgba(14, 116, 144, 0.22);
+
+  --color-file: #0369a1;
+  --color-folder: #0284c7;
+  --color-success: #15803d;
+  --color-warning: #c2410c;
+  --color-error: #dc2626;
+  --color-ai: #7c3aed;
+  --color-ai-working: #0e7490;
+  --color-info: #1d4ed8;
+
+  --diff-add-bg: rgba(21, 128, 61, 0.1);
+  --diff-del-bg: rgba(220, 38, 38, 0.1);
+  --diff-add-text: #15803d;
+  --diff-del-text: #dc2626;
+
+  --color-error-muted: rgba(220, 38, 38, 0.1);
+  --shadow-overlay: 0 8px 32px rgba(0, 0, 0, 0.12), 0 0 1px rgba(14, 116, 144, 0.15);
+
+  --radius-sm: 2px;
+  --radius-md: 3px;
+}
