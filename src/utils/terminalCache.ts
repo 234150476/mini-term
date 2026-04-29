@@ -105,10 +105,39 @@ export const BLUEPRINT_TERMINAL_THEME = {
   brightWhite: '#f8fafc',
 };
 
+export const BLUEPRINT_LIGHT_TERMINAL_THEME = {
+  background: '#f5f8fb',
+  foreground: '#0f172a',
+  cursor: '#0e7490',
+  cursorAccent: '#f5f8fb',
+  selectionBackground: 'rgba(14,116,144,0.15)',
+  selectionForeground: '#0f172a',
+  black: '#1e293b',
+  red: '#dc2626',
+  green: '#15803d',
+  yellow: '#c2410c',
+  blue: '#1d4ed8',
+  magenta: '#7c3aed',
+  cyan: '#0e7490',
+  white: '#94a3b8',
+  brightBlack: '#475569',
+  brightRed: '#ef4444',
+  brightGreen: '#22c55e',
+  brightYellow: '#f97316',
+  brightBlue: '#3b82f6',
+  brightMagenta: '#8b5cf6',
+  brightCyan: '#14b8a6',
+  brightWhite: '#64748b',
+};
+
 export function getTerminalTheme(terminalFollowTheme: boolean): typeof DARK_TERMINAL_THEME {
   if (!terminalFollowTheme) return DARK_TERMINAL_THEME;
   const skin = useAppStore.getState().config.skin;
-  if (skin === 'blueprint') return BLUEPRINT_TERMINAL_THEME;
+  if (skin === 'blueprint') {
+    return getResolvedTheme() === 'light'
+      ? BLUEPRINT_LIGHT_TERMINAL_THEME
+      : BLUEPRINT_TERMINAL_THEME;
+  }
   if (getResolvedTheme() === 'light') return LIGHT_TERMINAL_THEME;
   return DARK_TERMINAL_THEME;
 }
