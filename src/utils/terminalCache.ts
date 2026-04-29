@@ -18,6 +18,7 @@ import { useAppStore } from '../store';
 import type { PtyOutputPayload } from '../types';
 import { getResolvedTheme } from './themeManager';
 import { createPtyWriteQueue } from './ptyWriteQueue';
+import { getCurrentLineSnapshotFromBuffer } from './terminalSnapshot';
 
 export interface CachedTerminal {
   term: Terminal;
@@ -189,20 +190,7 @@ function isStandaloneEnter(data: string): boolean {
 function getCurrentLineSnapshot(term: Terminal): string | undefined {
   const buffer = term.buffer.active;
   const cursorLine = buffer.baseY + buffer.cursorY;
-  let startLine = cursorLine;
-
-  while (startLine > 0 && buffer.getLine(startLine)?.isWrapped) {
-    startLine -= 1;
-  }
-
-  const parts: string[] = [];
-  for (let lineIndex = startLine; lineIndex <= cursorLine; lineIndex += 1) {
-    const line = buffer.getLine(lineIndex);
-    if (line) parts.push(line.translateToString(true));
-  }
-
-  const snapshot = parts.join('').trim();
-  return snapshot.length > 0 ? snapshot : undefined;
+  return getCurrentLineSnapshotFromBuffer(buffer, cursorLine, buffer.cursorX);
 }
 
 export function getOrCreateTerminal(ptyId: number): CachedTerminal {

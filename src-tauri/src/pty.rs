@@ -62,6 +62,7 @@ struct InputState {
     cursor: usize,
     escape: EscapeState,
     bracketed_paste: bool,
+    allow_line_snapshot: bool,
 }
 
 impl InputState {
@@ -69,6 +70,7 @@ impl InputState {
         self.line.clear();
         self.cursor = 0;
         self.escape = EscapeState::None;
+        self.allow_line_snapshot = false;
     }
 
     fn insert_char(&mut self, ch: char) {
@@ -125,7 +127,10 @@ impl InputState {
             "3~" => self.delete(),
             // Up/Down and other editing shortcuts can replace the whole shell line.
             // We can't reconstruct those mutations reliably from input alone.
-            "A" | "B" => self.clear_line(),
+            "A" | "B" => {
+                self.clear_line();
+                self.allow_line_snapshot = true;
+            }
             _ => self.clear_line(),
         }
     }
@@ -443,13 +448,19 @@ impl PtyManager {
                         }
                     }
                     '\r' | '\n' => {
-                        // 记录 Enter 时间，供输出扫描用
-                        self.last_enter
-                            .lock()
-                            .unwrap()
-                            .insert(pty_id, Instant::now());
+                        let allow_line_snapshot = state.allow_line_snapshot;
                         let raw = state.take_line();
                         let trimmed = raw.trim();
+                        let snapshot_is_ai = allow_line_snapshot
+                            && line_snapshot.map(line_contains_ai_command).unwrap_or(false);
+                        // 记录 Enter 时间，供输出扫描用。空回车不打开扫描窗口，
+                        // 避免 shell autosuggestion 出现在重绘输出中时被当成命令 echo。
+                        if !trimmed.is_empty() || snapshot_is_ai {
+                            self.last_enter
+                                .lock()
+                                .unwrap()
+                                .insert(pty_id, Instant::now());
+                        }
                         if !trimmed.is_empty() && self.is_ai_session(pty_id) {
                             let ts = std::time::SystemTime::now()
                                 .duration_since(std::time::UNIX_EPOCH)
@@ -475,11 +486,14 @@ impl PtyManager {
                             // 非 AI 会话：检测 AI 命令启动。优先使用本地输入状态；
                             // 对上方向键历史、Tab 补全等 shell 改写行的场景，使用
                             // 前端在 Enter 前捕获的可见行快照补判。
-                            let snapshot_is_ai =
-                                line_snapshot.map(line_contains_ai_command).unwrap_or(false);
                             if is_interactive_ai_command(trimmed) || snapshot_is_ai {
                                 enter_ai = true;
                             }
+                        }
+                    }
+                    '\t' => {
+                        if !state.line.is_empty() {
+                            state.allow_line_snapshot = true;
                         }
                     }
                     '\x7f' | '\x08' => {
@@ -1191,6 +1205,28 @@ mod tests {
         mgr.track_input(1, "\x1b[A"); // shell/PSReadLine restores a previous command
         mgr.track_input_with_line_snapshot(1, "\r", Some("PS D:\\Git\\mini-term> claude"));
         assert!(mgr.is_ai_session(1));
+    }
+
+    #[test]
+    fn empty_enter_with_ai_autosuggestion_snapshot_does_not_enter_ai_session() {
+        let mgr = PtyManager::new();
+        mgr.track_input_with_line_snapshot(1, "\r", Some("D:\\Git\\mini-term> claude"));
+        assert!(!mgr.is_ai_session(1));
+    }
+
+    #[test]
+    fn empty_enter_with_ai_autosuggestion_snapshot_does_not_open_output_scan_window() {
+        let mgr = PtyManager::new();
+        mgr.track_input_with_line_snapshot(1, "\r", Some("D:\\Git\\mini-term> claude"));
+        assert!(!mgr.last_enter.lock().unwrap().contains_key(&1));
+    }
+
+    #[test]
+    fn history_navigation_with_non_ai_snapshot_does_not_open_output_scan_window() {
+        let mgr = PtyManager::new();
+        mgr.track_input(1, "\x1b[B");
+        mgr.track_input_with_line_snapshot(1, "\r", Some("D:\\Git\\mini-term>"));
+        assert!(!mgr.last_enter.lock().unwrap().contains_key(&1));
     }
 
     #[test]
