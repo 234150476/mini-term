@@ -19,7 +19,7 @@ import { useAiSubmitMarker } from './hooks/useAiSubmitMarker';
 import { useMarkerHotkeys } from './hooks/useMarkerHotkeys';
 import { checkForUpdate, type ReleaseInfo } from './utils/updateChecker';
 import { applyTheme } from './utils/themeManager';
-import { markAiPty } from './utils/terminalCache';
+import { markAiPty, updateAllTerminalThemes } from './utils/terminalCache';
 import { includeActiveProject } from './utils/projectKeepAlive';
 import type { AppConfig, PtyStatusChangePayload, PtyExitPayload, PaneStatus } from './types';
 
@@ -116,6 +116,16 @@ export function App() {
   useEffect(() => {
     applyTheme(config.theme ?? 'auto');
   }, [config.theme]);
+
+  // 皮肤变化时应用
+  useEffect(() => {
+    const skin = config.skin ?? 'none';
+    document.documentElement.dataset.skin = skin === 'none' ? '' : skin;
+    if (skin === 'blueprint') {
+      applyTheme('dark');
+    }
+    updateAllTerminalThemes(config.terminalFollowTheme);
+  }, [config.skin]);
 
   // 启动时获取版本号并检查更新
   useEffect(() => {
