@@ -22,6 +22,7 @@ export interface AppConfig {
   layoutSizes?: number[];
   middleColumnSizes?: number[];
   theme: 'auto' | 'light' | 'dark';
+  skin: 'none' | 'blueprint';
   terminalFollowTheme: boolean;
   aiCompletionPopup: boolean;
   aiCompletionTaskbarFlash: boolean;

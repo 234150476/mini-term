@@ -325,6 +325,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     uiFontSize: 13,
     terminalFontSize: 14,
     theme: 'auto',
+    skin: 'none',
     terminalFollowTheme: true,
     aiCompletionPopup: true,
     aiCompletionTaskbarFlash: true,
