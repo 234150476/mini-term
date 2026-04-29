@@ -41,34 +41,63 @@
 AI 色:        #a78bfa
 ```
 
+## 主题联动
+
+Blueprint 皮肤激活时，**强制锁定 resolved theme 为 dark**。原因：蓝图色彩体系基于深色背景设计，不存在 light 变体。
+
+实现：`applySkin('blueprint')` 时如果当前 resolved theme 为 light，自动切换到 dark 并禁用 theme selector（或置灰显示提示）。卸载皮肤时恢复用户原始 theme 选择。
+
 ## 网格系统
 
-使用 CSS `background-image` 叠加两层网格，挂在全局伪元素或 body 上：
+使用 `#root::after` 伪元素承载网格背景（`#root::before` 已被 noise texture 占用）。Blueprint 皮肤激活时隐藏 noise texture（`opacity: 0`）。
 
-- 次网格: 20px 间距，`rgba(255,255,255,0.03)` 白色细线
-- 主网格: 100px 间距，`rgba(96,165,250,0.08)` 浅蓝粗线
-- `pointer-events: none` 确保不影响交互
+```css
+[data-skin="blueprint"] #root::before {
+  opacity: 0; /* 隐藏 noise texture */
+}
+[data-skin="blueprint"] #root::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(rgba(96,165,250,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96,165,250,0.08) 1px, transparent 1px);
+  background-size: 20px 20px, 20px 20px, 100px 100px, 100px 100px;
+}
+```
+
+- 次网格: 20px 间距，白色细线
+- 主网格: 100px 间距，浅蓝粗线
+- 面板内容区使用实色背景覆盖网格，避免文字可读性下降
 
 ## 面板视觉元素
 
 ### 角标记
 
-每个面板（panel）使用 `::before` 和 `::after` 伪元素绘制 L 型角标记：
+使用 `box-shadow` 模拟角标记效果（避免伪元素冲突）。通过 `blueprint.css` 中为特定容器添加 `outline` + `box-shadow` 组合实现：
+
+**目标容器选择器**（在 `[data-skin="blueprint"]` 作用域下）：
+- `.project-list-container` — 项目列表面板
+- `.file-tree-container` — 文件树面板
+- `.terminal-area` — 终端主区域
+- `.git-history-container` — Git 历史面板
+- `.ai-history-panel` — AI 历史面板
+
+角标记使用 `outline` + 伪类或嵌套 `box-shadow` 实现。如果特定容器的伪元素已被占用，改用 CSS `outline-offset` + 多重 `box-shadow` 达到视觉效果，不需要修改组件 JSX。
 
 ```css
-.panel::before {
-  top: 0; left: 0;
-  border-top: 1.5px solid rgba(34,211,238,0.6);
-  border-left: 1.5px solid rgba(34,211,238,0.6);
-  width: 6px; height: 6px;
-}
-.panel::after {
-  bottom: 0; right: 0;
-  border-bottom: 1.5px solid rgba(34,211,238,0.6);
-  border-right: 1.5px solid rgba(34,211,238,0.6);
-  width: 6px; height: 6px;
+[data-skin="blueprint"] .terminal-content {
+  box-shadow:
+    inset 6px 6px 0 -5px rgba(34,211,238,0.6),
+    inset -6px -6px 0 -5px rgba(34,211,238,0.6);
 }
 ```
+
+备选方案：对于确认没有伪元素占用的容器，仍可使用 `::before`/`::after` 绝对定位绘制 L 型线。
 
 ### 面板标题
 
@@ -139,7 +168,7 @@ BLUEPRINT_TERMINAL_THEME = {
 | 文件 | 变更类型 | 说明 |
 |------|----------|------|
 | `src/types.ts` | 修改 | `AppConfig.skin: 'none' \| 'blueprint'` |
-| `src/store.ts` | 修改 | 默认值 + `applySkin()` |
+| `src/store.ts` | 修改 | 默认值 + `applySkin()` 见下方职责定义 |
 | `src/styles.css` | 修改 | `[data-skin="blueprint"]` 变量覆盖块 |
 | `src/blueprint.css` | 新增 | 网格、角标记、光晕、字体等专属样式 |
 | `src/App.tsx` | 修改 | useEffect 监听 skin 变化设置 data-skin |
@@ -158,13 +187,50 @@ BLUEPRINT_TERMINAL_THEME = {
 
 皮肤切换立即生效，无需重启。切换时调用 `applySkin()` 更新 `data-skin` 属性并同步终端配色。
 
+## `applySkin()` 职责
+
+```typescript
+function applySkin(skin: 'none' | 'blueprint') {
+  // 1. 设置 data-skin 属性
+  document.documentElement.dataset.skin = skin === 'none' ? '' : skin;
+
+  // 2. Blueprint 强制 dark theme
+  if (skin === 'blueprint') {
+    applyTheme('dark');
+  }
+
+  // 3. 同步终端配色
+  updateAllTerminalThemes(store.config.terminalFollowTheme);
+
+  // 4. 持久化
+  invoke('save_config', { config: store.config });
+}
+```
+
+## 终端配色决策树
+
+```
+if (!terminalFollowTheme) → DARK_TERMINAL_THEME (用户原始选择)
+if (skin === 'blueprint') → BLUEPRINT_TERMINAL_THEME
+if (resolvedTheme === 'light') → LIGHT_TERMINAL_THEME
+else → DARK_TERMINAL_THEME
+```
+
+## 弹出层 & 模态框
+
+模态框（Settings、Search、Diff 等）、右键菜单、Toast 通知 **仅通过 CSS 变量继承获得蓝图配色**，不添加角标记或额外装饰。这些组件使用 `var(--bg-overlay)`、`var(--border-default)` 等变量，变量覆盖后自动生效。
+
+## Allotment 分割条
+
+Sash hover 颜色通过 `--accent-muted` 变量自动变为青色，无需额外处理。
+
 ## 滚动条
 
-Blueprint 皮肤下自定义 webkit scrollbar:
+Blueprint 皮肤下自定义 webkit scrollbar（使用 `[data-skin="blueprint"]` 选择器确保优先级）：
 
 ```css
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(96,165,250,0.2); }
-::-webkit-scrollbar-thumb:hover { background: rgba(96,165,250,0.4); }
+[data-skin="blueprint"] ::-webkit-scrollbar { width: 4px; }
+[data-skin="blueprint"] ::-webkit-scrollbar-track { background: transparent; }
+[data-skin="blueprint"] ::-webkit-scrollbar-thumb { background: rgba(96,165,250,0.2); }
+[data-skin="blueprint"] ::-webkit-scrollbar-thumb:hover { background: rgba(96,165,250,0.4); }
 ```
