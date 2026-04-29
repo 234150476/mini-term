@@ -56,6 +56,8 @@ pub struct AppConfig {
     pub middle_column_sizes: Option<Vec<f64>>,
     #[serde(default = "default_theme")]
     pub theme: String,
+    #[serde(default = "default_skin")]
+    pub skin: String,
     #[serde(default = "default_terminal_follow_theme")]
     pub terminal_follow_theme: bool,
     #[serde(default = "default_ai_completion_popup")]
@@ -168,6 +170,9 @@ fn default_terminal_font_size() -> f64 {
 fn default_theme() -> String {
     "auto".into()
 }
+fn default_skin() -> String {
+    "none".into()
+}
 fn default_terminal_follow_theme() -> bool {
     true
 }
@@ -204,6 +209,7 @@ impl Default for AppConfig {
             layout_sizes: None,
             middle_column_sizes: None,
             theme: default_theme(),
+            skin: default_skin(),
             terminal_follow_theme: default_terminal_follow_theme(),
             ai_completion_popup: default_ai_completion_popup(),
             ai_completion_taskbar_flash: default_ai_completion_taskbar_flash(),
