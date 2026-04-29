@@ -122,3 +122,60 @@
   background: rgba(34, 211, 238, 0.3) !important;
   box-shadow: 0 0 6px rgba(34, 211, 238, 0.2);
 }
+
+/* ===== Blueprint Light Mode Overrides ===== */
+
+[data-skin="blueprint"][data-theme="light"] #root::after {
+  background-image:
+    linear-gradient(rgba(14, 116, 144, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 116, 144, 0.04) 1px, transparent 1px),
+    linear-gradient(rgba(14, 116, 144, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 116, 144, 0.1) 1px, transparent 1px);
+}
+
+[data-skin="blueprint"][data-theme="light"] [data-panel] {
+  border-color: rgba(14, 116, 144, 0.15);
+}
+
+[data-skin="blueprint"][data-theme="light"] [data-panel]::before {
+  border-top-color: rgba(14, 116, 144, 0.45);
+  border-left-color: rgba(14, 116, 144, 0.45);
+}
+
+[data-skin="blueprint"][data-theme="light"] [data-panel]::after {
+  border-bottom-color: rgba(14, 116, 144, 0.45);
+  border-right-color: rgba(14, 116, 144, 0.45);
+}
+
+[data-skin="blueprint"][data-theme="light"] [data-panel]:hover {
+  border-color: rgba(14, 116, 144, 0.3);
+  box-shadow: inset 0 0 20px rgba(14, 116, 144, 0.03);
+}
+
+[data-skin="blueprint"][data-theme="light"] [data-panel-header] {
+  color: rgba(14, 116, 144, 0.6);
+  border-bottom-color: rgba(14, 116, 144, 0.15);
+}
+
+[data-skin="blueprint"][data-theme="light"] [data-file-item]:hover {
+  border-left-color: rgba(14, 116, 144, 0.4);
+  color: #0e7490;
+  background: rgba(14, 116, 144, 0.04);
+}
+
+[data-skin="blueprint"][data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(14, 116, 144, 0.15);
+}
+[data-skin="blueprint"][data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(14, 116, 144, 0.3);
+}
+
+[data-skin="blueprint"][data-theme="light"] .sash-container .sash:hover {
+  background: rgba(14, 116, 144, 0.25) !important;
+  box-shadow: 0 0 6px rgba(14, 116, 144, 0.15);
+}
+
+[data-skin="blueprint"][data-theme="light"] button[class*="border"]:hover {
+  border-color: rgba(14, 116, 144, 0.35) !important;
+  box-shadow: 0 0 10px rgba(14, 116, 144, 0.08);
+}
