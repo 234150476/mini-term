@@ -5,6 +5,7 @@ import { useAppStore } from '../store';
 import { useTauriEvent } from '../hooks/useTauriEvent';
 import { FileViewerModal } from './FileViewerModal';
 import { showContextMenu } from '../utils/contextMenu';
+import { MOD_LABEL } from '../utils/platform';
 import type { SearchResultItem, SearchResultsPayload, SearchCompletePayload } from '../types';
 
 // ── Keyword highlight helper ──
@@ -345,7 +346,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
           {status === 'searching' && <span>搜索中... 已找到 {results.length} 条</span>}
           {status === 'done' && mode === 'filename' && <span>找到 {totalCount} 个文件</span>}
           {status === 'done' && mode === 'content' && <span>找到 {totalCount} 处匹配</span>}
-          {status === 'idle' && <span>Ctrl+Shift+F 打开搜索</span>}
+          {status === 'idle' && <span>{MOD_LABEL}+Shift+F 打开搜索</span>}
         </div>
       </div>
 

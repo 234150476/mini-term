@@ -8,6 +8,7 @@ import { useTauriEvent } from '../hooks/useTauriEvent';
 import { showContextMenu } from '../utils/contextMenu';
 import { showPrompt } from '../utils/prompt';
 import { isAiPty } from '../utils/terminalCache';
+import { MOD_LABEL } from '../utils/platform';
 import { DiffModal } from './DiffModal';
 import { FileViewerModal } from './FileViewerModal';
 import { initFileDrag } from '../utils/fileDragState';
@@ -484,7 +485,7 @@ export function FileTree() {
           <button
             type="button"
             onClick={() => setSearchModalOpen(true)}
-            title="搜索文件 (Ctrl+Shift+F)"
+            title={`搜索文件 (${MOD_LABEL}+Shift+F)`}
             className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors text-sm leading-none px-1.5 py-0.5 rounded-[var(--radius-sm)] hover:bg-[var(--border-subtle)]"
           >
             ⌕

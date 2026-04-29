@@ -8,6 +8,7 @@ import { playNotificationSound } from '../utils/notificationSound';
 import { checkForUpdate, compareVersions, type ReleaseInfo } from '../utils/updateChecker';
 import { applyTheme } from '../utils/themeManager';
 import { updateAllTerminalThemes } from '../utils/terminalCache';
+import { MOD_LABEL } from '../utils/platform';
 import type { ShellConfig, EditorConfig } from '../types';
 
 interface Props {
@@ -1052,17 +1053,23 @@ function AboutSettings() {
 
 const SHORTCUT_GROUPS: { title: string; items: { keys: string; desc: string }[] }[] = [
   {
+    title: '全局',
+    items: [
+      { keys: `${MOD_LABEL} + Shift + F`, desc: '打开/关闭全局搜索' },
+    ],
+  },
+  {
     title: '终端操作',
     items: [
-      { keys: 'Ctrl + Shift + C', desc: '复制终端选中文本' },
-      { keys: 'Ctrl + Shift + V', desc: '粘贴到终端' },
+      { keys: `${MOD_LABEL} + Shift + C`, desc: '复制终端选中文本' },
+      { keys: `${MOD_LABEL} + Shift + V`, desc: '粘贴到终端' },
     ],
   },
   {
     title: 'AI 任务标记',
     items: [
-      { keys: 'Ctrl + Shift + ↑', desc: '跳转到上一个 AI 任务提交' },
-      { keys: 'Ctrl + Shift + ↓', desc: '跳转到下一个 AI 任务提交' },
+      { keys: `${MOD_LABEL} + Shift + ↑`, desc: '跳转到上一个 AI 任务提交' },
+      { keys: `${MOD_LABEL} + Shift + ↓`, desc: '跳转到下一个 AI 任务提交' },
     ],
   },
 ];

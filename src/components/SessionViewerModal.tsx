@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import { MOD_LABEL } from '../utils/platform';
 import type { AiSession, AiSessionMessage } from '../types';
 
 interface Props {
@@ -199,7 +200,7 @@ export function SessionViewerModal({ open, onClose, session, projectPath }: Prop
               ref={searchRef}
               type="text"
               className="flex-1 bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
-              placeholder="搜索消息内容… (Ctrl+F)"
+              placeholder={`搜索消息内容… (${MOD_LABEL}+F)`}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

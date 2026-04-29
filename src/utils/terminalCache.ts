@@ -246,12 +246,12 @@ export function getOrCreateTerminal(ptyId: number): CachedTerminal {
   // 剪贴板快捷键
   term.attachCustomKeyEventHandler((e) => {
     if (e.type !== 'keydown') return true;
-    if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyC') {
       e.preventDefault();
       void copyTerminalSelection(ptyId);
       return false;
     }
-    if (e.ctrlKey && e.shiftKey && e.code === 'KeyV') {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyV') {
       e.preventDefault();
       void pasteToTerminal(ptyId);
       return false;

@@ -52,7 +52,7 @@ export function useMarkerHotkeys() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!e.ctrlKey || !e.shiftKey || e.altKey || e.metaKey) return;
+      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return;
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
 
       const state = useAppStore.getState();

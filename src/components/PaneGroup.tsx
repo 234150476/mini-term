@@ -8,6 +8,7 @@ import { MarkerList } from './MarkerList';
 import { showContextMenu } from '../utils/contextMenu';
 import { showConfirm, showPrompt } from '../utils/prompt';
 import { disposeTerminal } from '../utils/terminalCache';
+import { MOD_LABEL } from '../utils/platform';
 import type { SplitNode, PaneState, ShellConfig, AiMarker } from '../types';
 
 const EMPTY_MARKERS: AiMarker[] = [];
@@ -309,7 +310,7 @@ export function PaneGroup({ projectId, node, projectPath, onSplit, onClosePane, 
               type="button"
               className="mr-1 px-1.5 py-0.5 text-[11px] rounded text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--border-subtle)] flex items-center gap-1 transition-colors"
               onClick={() => (markerOpen ? setMarkerOpen(false) : openMarkerPopover())}
-              title="AI 任务标记 (Ctrl+Shift+↑/↓ 跳转)"
+              title={`AI 任务标记 (${MOD_LABEL}+Shift+↑/↓ 跳转)`}
             >
               <span>⚑</span>
               <span className="tabular-nums">{markers.length}</span>

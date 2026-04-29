@@ -102,7 +102,7 @@ export function App() {
   // Ctrl+Shift+F 打开/关闭搜索弹窗
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
         e.preventDefault();
         const { searchModalOpen: isOpen, setSearchModalOpen: setOpen } = useAppStore.getState();
         setOpen(!isOpen);
