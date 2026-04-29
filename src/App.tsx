@@ -121,9 +121,6 @@ export function App() {
   useEffect(() => {
     const skin = config.skin ?? 'none';
     document.documentElement.dataset.skin = skin === 'none' ? '' : skin;
-    if (skin === 'blueprint') {
-      applyTheme('dark');
-    }
     updateAllTerminalThemes(config.terminalFollowTheme);
   }, [config.skin]);
 

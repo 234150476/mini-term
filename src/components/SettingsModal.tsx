@@ -667,13 +667,10 @@ function SystemSettings() {
         ]).map((opt) => (
           <button
             key={opt.value}
-            disabled={config.skin === 'blueprint'}
             className={`flex-1 py-2 rounded-[var(--radius-sm)] text-base transition-all ${
-              config.skin === 'blueprint'
-                ? 'opacity-40 cursor-not-allowed bg-[var(--bg-base)] text-[var(--text-muted)] border border-[var(--border-subtle)]'
-                : config.theme === opt.value
-                  ? 'bg-[var(--accent-muted)] text-[var(--accent)] border border-[var(--accent)]'
-                  : 'bg-[var(--bg-base)] text-[var(--text-secondary)] border border-[var(--border-default)] hover:border-[var(--accent)]'
+              config.theme === opt.value
+                ? 'bg-[var(--accent-muted)] text-[var(--accent)] border border-[var(--accent)]'
+                : 'bg-[var(--bg-base)] text-[var(--text-secondary)] border border-[var(--border-default)] hover:border-[var(--accent)]'
             }`}
             onClick={() => handleThemeChange(opt.value)}
           >
@@ -681,12 +678,6 @@ function SystemSettings() {
           </button>
         ))}
       </div>
-
-      {config.skin === 'blueprint' && (
-        <div className="text-xs text-[var(--text-muted)] mt-1 mb-2">
-          蓝图皮肤仅支持深色主题
-        </div>
-      )}
 
       {/* 皮肤 */}
       <div className="text-base text-[var(--text-muted)] uppercase tracking-[0.1em] mb-2 mt-4">
