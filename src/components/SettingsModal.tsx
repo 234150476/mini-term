@@ -644,6 +644,14 @@ function SystemSettings() {
     invoke('save_config', { config: newConfig });
   }, [setConfig]);
 
+  const handleSkinChange = useCallback((skin: 'none' | 'blueprint') => {
+    const currentConfig = useAppStore.getState().config;
+    const newConfig = { ...currentConfig, skin };
+    setConfig(newConfig);
+    updateAllTerminalThemes(newConfig.terminalFollowTheme);
+    invoke('save_config', { config: newConfig });
+  }, [setConfig]);
+
   return (
     <div className="space-y-6">
       {/* 主题模式 */}
@@ -659,12 +667,45 @@ function SystemSettings() {
         ]).map((opt) => (
           <button
             key={opt.value}
+            disabled={config.skin === 'blueprint'}
             className={`flex-1 py-2 rounded-[var(--radius-sm)] text-base transition-all ${
-              config.theme === opt.value
+              config.skin === 'blueprint'
+                ? 'opacity-40 cursor-not-allowed bg-[var(--bg-base)] text-[var(--text-muted)] border border-[var(--border-subtle)]'
+                : config.theme === opt.value
+                  ? 'bg-[var(--accent-muted)] text-[var(--accent)] border border-[var(--accent)]'
+                  : 'bg-[var(--bg-base)] text-[var(--text-secondary)] border border-[var(--border-default)] hover:border-[var(--accent)]'
+            }`}
+            onClick={() => handleThemeChange(opt.value)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {config.skin === 'blueprint' && (
+        <div className="text-xs text-[var(--text-muted)] mt-1 mb-2">
+          蓝图皮肤仅支持深色主题
+        </div>
+      )}
+
+      {/* 皮肤 */}
+      <div className="text-base text-[var(--text-muted)] uppercase tracking-[0.1em] mb-2 mt-4">
+        皮肤
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        {([
+          { value: 'none' as const, label: '无' },
+          { value: 'blueprint' as const, label: '蓝图' },
+        ]).map((opt) => (
+          <button
+            key={opt.value}
+            className={`flex-1 py-2 rounded-[var(--radius-sm)] text-base transition-all ${
+              config.skin === opt.value
                 ? 'bg-[var(--accent-muted)] text-[var(--accent)] border border-[var(--accent)]'
                 : 'bg-[var(--bg-base)] text-[var(--text-secondary)] border border-[var(--border-default)] hover:border-[var(--accent)]'
             }`}
-            onClick={() => handleThemeChange(opt.value)}
+            onClick={() => handleSkinChange(opt.value)}
           >
             {opt.label}
           </button>
