@@ -167,7 +167,7 @@ export function TerminalArea({ projectId, projectPath }: Props) {
   }, [projectId, updateTabLayout]);
 
   return (
-    <div className="flex flex-col h-full bg-[var(--bg-terminal)]">
+    <div data-panel className="flex flex-col h-full bg-[var(--bg-terminal)]">
       <div className="flex-1 overflow-hidden relative">
         {activeTab && (
           <div

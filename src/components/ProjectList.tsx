@@ -503,7 +503,7 @@ export function ProjectList() {
   const sessionsVisible = config.sessionsVisible;
 
   return (
-    <div className="h-full bg-[var(--bg-surface)] flex flex-col select-none">
+    <div data-panel className="h-full bg-[var(--bg-surface)] flex flex-col select-none">
       <Allotment vertical>
         {/* 上半部分：项目列表 */}
         <Allotment.Pane minSize={100} visible={projectsVisible}>

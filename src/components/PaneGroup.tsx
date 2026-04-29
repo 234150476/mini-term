@@ -248,6 +248,7 @@ export function PaneGroup({ projectId, node, projectPath, onSplit, onClosePane, 
     <div className="w-full h-full flex flex-col" data-pty-id={activePane.ptyId}>
       {/* Tab bar */}
       <div
+        data-panel-header
         className="flex bg-[var(--bg-elevated)] border-b border-[var(--border-subtle)] text-[11px] overflow-x-auto select-none shrink-0"
         onMouseEnter={() => setHeaderHover(true)}
         onMouseLeave={() => setHeaderHover(false)}
@@ -257,6 +258,7 @@ export function PaneGroup({ projectId, node, projectPath, onSplit, onClosePane, 
           return (
             <div
               key={pane.id}
+              data-pane-tab
               className={`flex items-center gap-1.5 px-3 py-[3px] cursor-pointer whitespace-nowrap transition-all duration-100 relative ${
                 isActive
                   ? 'bg-[var(--bg-terminal)] text-[var(--text-primary)]'
