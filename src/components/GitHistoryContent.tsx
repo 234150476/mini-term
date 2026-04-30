@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { useTauriEvent } from '../hooks/useTauriEvent';
@@ -61,7 +61,9 @@ function buildRepoTree(repos: GitRepoInfo[], projectPath: string): RepoTreeNode[
   return root;
 }
 
-function GitActionButton({
+const EMPTY_BRANCHES: BranchInfo[] = [];
+
+const GitActionButton = memo(function GitActionButton({
   repoPath,
   action,
   state,
@@ -109,7 +111,66 @@ function GitActionButton({
       {display}
     </button>
   );
-}
+});
+
+const CommitItem = memo(function CommitItem({
+  commit,
+  allBranches,
+  depth,
+  repoPath,
+  onContextMenu,
+  onDoubleClick,
+}: {
+  commit: GitCommitInfo;
+  allBranches: BranchInfo[];
+  depth: number;
+  repoPath: string;
+  onContextMenu: (e: React.MouseEvent, repoPath: string, commit: GitCommitInfo) => void;
+  onDoubleClick: (repoPath: string, commit: GitCommitInfo) => void;
+}) {
+  const commitBranches = allBranches.filter((b) => b.commitHash === commit.hash);
+  return (
+    <div
+      className="py-1.5 cursor-pointer hover:bg-[var(--border-subtle)] rounded-[var(--radius-sm)] transition-colors duration-100"
+      style={{ paddingLeft: `${(depth + 1) * 16 + 8}px`, paddingRight: '8px' }}
+      title={commit.body ? `${commit.message}\n\n${commit.body}` : commit.message}
+      onContextMenu={(e) => onContextMenu(e, repoPath, commit)}
+      onDoubleClick={() => onDoubleClick(repoPath, commit)}
+    >
+      <div className="text-sm text-[var(--text-primary)] flex items-center gap-1 min-w-0">
+        {commitBranches.map((b) => (
+          <span
+            key={b.name}
+            className="inline-flex items-center shrink-0 text-[11px] leading-[18px] px-1.5 rounded font-medium"
+            style={{
+              backgroundColor: b.isHead
+                ? 'var(--color-accent, #58a6ff)'
+                : b.isRemote
+                  ? 'var(--border-subtle, #3d3d3d)'
+                  : 'rgba(63, 185, 80, 0.2)',
+              color: b.isHead
+                ? '#fff'
+                : b.isRemote
+                  ? 'var(--text-muted)'
+                  : 'rgb(63, 185, 80)',
+            }}
+            title={b.isRemote ? `远程分支: ${b.name}` : b.isHead ? `当前分支: ${b.name}` : `本地分支: ${b.name}`}
+          >
+            {b.name}
+          </span>
+        ))}
+        <span className="truncate">{commit.message}</span>
+      </div>
+      <div className="text-xs text-[var(--text-muted)] flex items-center gap-1.5 mt-0.5">
+        <span>{commit.author}</span>
+        <span>&middot;</span>
+        <span>{formatRelativeTime(commit.timestamp)}</span>
+        <span>&middot;</span>
+        <span className="font-mono">{commit.shortHash}</span>
+      </div>
+    </div>
+  );
+});
 
 const GIT_REFRESH_PATTERNS = [
   /create mode/,
@@ -398,7 +459,7 @@ export function GitHistoryContent({ projectPath, repos, refreshRepos }: GitHisto
     loadBranches(repoPath);
   }, [repos, projectPath, loadCommits, loadBranches]);
 
-  const repoTree = buildRepoTree(repos, projectPath);
+  const repoTree = useMemo(() => buildRepoTree(repos, projectPath), [repos, projectPath]);
 
   // 递归渲染树节点
   const renderTreeNode = (node: RepoTreeNode, depth: number) => {
@@ -539,53 +600,17 @@ export function GitHistoryContent({ projectPath, repos, refreshRepos }: GitHisto
 
           {isExpanded && (
             <div className="relative" style={{ zIndex: 0 }}>
-              {state?.commits.map((commit) => {
-                const commitBranches = (repoBranches.get(repo.path) ?? []).filter(
-                  (b) => b.commitHash === commit.hash,
-                );
-                return (
-                  <div
-                    key={commit.hash}
-                    className="py-1.5 cursor-pointer hover:bg-[var(--border-subtle)] rounded-[var(--radius-sm)] transition-colors duration-100"
-                    style={{ paddingLeft: `${(depth + 1) * 16 + 8}px`, paddingRight: '8px' }}
-                    title={commit.body ? `${commit.message}\n\n${commit.body}` : commit.message}
-                    onContextMenu={(e) => handleCommitContextMenu(e, repo.path, commit)}
-                    onDoubleClick={() => handleViewDiff(repo.path, commit)}
-                  >
-                    <div className="text-sm text-[var(--text-primary)] flex items-center gap-1 min-w-0">
-                      {commitBranches.map((b) => (
-                        <span
-                          key={b.name}
-                          className="inline-flex items-center shrink-0 text-[11px] leading-[18px] px-1.5 rounded font-medium"
-                          style={{
-                            backgroundColor: b.isHead
-                              ? 'var(--color-accent, #58a6ff)'
-                              : b.isRemote
-                                ? 'var(--border-subtle, #3d3d3d)'
-                                : 'rgba(63, 185, 80, 0.2)',
-                            color: b.isHead
-                              ? '#fff'
-                              : b.isRemote
-                                ? 'var(--text-muted)'
-                                : 'rgb(63, 185, 80)',
-                          }}
-                          title={b.isRemote ? `远程分支: ${b.name}` : b.isHead ? `当前分支: ${b.name}` : `本地分支: ${b.name}`}
-                        >
-                          {b.name}
-                        </span>
-                      ))}
-                      <span className="truncate">{commit.message}</span>
-                    </div>
-                    <div className="text-xs text-[var(--text-muted)] flex items-center gap-1.5 mt-0.5">
-                      <span>{commit.author}</span>
-                      <span>&middot;</span>
-                      <span>{formatRelativeTime(commit.timestamp)}</span>
-                      <span>&middot;</span>
-                      <span className="font-mono">{commit.shortHash}</span>
-                    </div>
-                  </div>
-                );
-              })}
+              {state?.commits.map((commit) => (
+                <CommitItem
+                  key={commit.hash}
+                  commit={commit}
+                  allBranches={repoBranches.get(repo.path) ?? EMPTY_BRANCHES}
+                  depth={depth}
+                  repoPath={repo.path}
+                  onContextMenu={handleCommitContextMenu}
+                  onDoubleClick={handleViewDiff}
+                />
+              ))}
 
               {state?.loading && (
                 <div className="text-center text-[var(--text-muted)] text-xs py-2">
