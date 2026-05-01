@@ -177,7 +177,7 @@ impl InputState {
     }
 }
 
-const AI_COMMANDS: &[&str] = &["claude", "codex"];
+const AI_COMMANDS: &[&str] = &["claude", "codex", "opencode"];
 
 /// 这些标志表示非交互命令（仅输出信息后退出），不应触发 AI 会话状态
 const NON_INTERACTIVE_FLAGS: &[&str] = &["-v", "--version", "-h", "--help", "-p", "--print"];
@@ -198,7 +198,7 @@ const AI_ENTER_SCAN_WINDOW: Duration = Duration::from_millis(2000);
 
 /// PTY resize 后的 TUI 重绘冷却窗口
 ///
-/// 窗口内的 PTY 输出不刷新 last_output 时间戳。用于屏蔽 Claude/Codex 等 TUI
+/// 窗口内的 PTY 输出不刷新 last_output 时间戳。用于屏蔽 Claude/Codex/OpenCode 等 TUI
 /// 应用在收到 ConPTY resize 信号后重绘 Alternate Screen Buffer 产生的伪输出,
 /// 避免 process_monitor 把这些重绘误判为 AI 活跃,导致 ai-working 状态闪烁以及
 /// 误触发 ai-working → ai-idle 的"任务完成"通知。
@@ -207,7 +207,7 @@ const RESIZE_COOLDOWN: Duration = Duration::from_millis(800);
 /// 终端焦点切换后的 TUI 重绘冷却窗口
 ///
 /// xterm.js 在 TUI 开启 DEC 私有模式 1004 (sendFocus) 后,会在 textarea
-/// 获得/失去焦点时向 PTY 写入 CSI I / CSI O。Claude/Codex 等应用收到这些
+/// 获得/失去焦点时向 PTY 写入 CSI I / CSI O。Claude/Codex/OpenCode 等应用收到这些
 /// 焦点事件后会做局部重绘(光标/状态反馈),产生伪输出。若不加冷却,重绘数据
 /// 会刷新 last_output,被 process_monitor 误判为 AI 活跃,导致仅仅点击/切出
 /// 终端就把 ai-idle 推成 ai-working。
