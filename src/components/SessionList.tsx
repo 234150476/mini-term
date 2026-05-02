@@ -1,9 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../store';
 import { showContextMenu } from '../utils/contextMenu';
 import { SessionViewerModal } from './SessionViewerModal';
 import type { AiSession } from '../types';
+
+const PAGE_SIZE = 20;
 
 /** 将 ISO 时间戳转换为简短的相对/绝对时间 */
 function formatTime(iso: string): string {
@@ -41,9 +43,11 @@ export function SessionList() {
   const config = useAppStore((s) => s.config);
   const activeProjectId = useAppStore((s) => s.activeProjectId);
 
-  const [sessions, setSessions] = useState<AiSession[]>([]);
+  const [allSessions, setAllSessions] = useState<AiSession[]>([]);
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(false);
   const [viewingSession, setViewingSession] = useState<AiSession | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const activeProject = config.projects.find((p) => p.id === activeProjectId);
 
@@ -51,9 +55,10 @@ export function SessionList() {
     setLoading(true);
     try {
       const result = await invoke<AiSession[]>('get_ai_sessions', { projectPath });
-      setSessions(result);
+      setAllSessions(result);
+      setDisplayCount(PAGE_SIZE);
     } catch {
-      setSessions([]);
+      setAllSessions([]);
     } finally {
       setLoading(false);
     }
@@ -63,9 +68,21 @@ export function SessionList() {
     if (activeProject?.path) {
       fetchSessions(activeProject.path);
     } else {
-      setSessions([]);
+      setAllSessions([]);
+      setDisplayCount(PAGE_SIZE);
     }
   }, [activeProject?.path, fetchSessions]);
+
+  const visibleSessions = allSessions.slice(0, displayCount);
+  const hasMore = displayCount < allSessions.length;
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || !hasMore || loading) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 40) {
+      setDisplayCount((c) => Math.min(c + PAGE_SIZE, allSessions.length));
+    }
+  }, [hasMore, loading, allSessions.length]);
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-[var(--bg-surface)] select-none">
@@ -82,12 +99,12 @@ export function SessionList() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-1.5">
-        {loading && sessions.length === 0 && (
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-1.5" onScroll={handleScroll}>
+        {loading && allSessions.length === 0 && (
           <div className="px-2.5 py-3 text-xs text-[var(--text-muted)] text-center">加载中…</div>
         )}
 
-        {!loading && sessions.length === 0 && (
+        {!loading && allSessions.length === 0 && (
           <div className="px-2.5 py-3 text-xs text-[var(--text-muted)] text-center">
             {activeProject ? '暂无会话记录' : '请先选择项目'}
           </div>
@@ -100,7 +117,7 @@ export function SessionList() {
           projectPath={activeProject?.path ?? ''}
         />
 
-        {sessions.map((session) => {
+        {visibleSessions.map((session) => {
           const badge = TYPE_BADGE[session.sessionType] ?? TYPE_BADGE.claude;
 
           return (
@@ -147,6 +164,12 @@ export function SessionList() {
             </div>
           );
         })}
+
+        {hasMore && (
+          <div className="px-2.5 py-2 text-[10px] text-[var(--text-muted)] text-center">
+            {allSessions.length - displayCount} 条更多…
+          </div>
+        )}
       </div>
     </div>
   );
