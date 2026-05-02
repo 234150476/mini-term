@@ -253,6 +253,32 @@ export function flushLayoutToConfig(projectId: string) {
   applyLayoutToStore(projectId);
 }
 
+/** 合并 flush：一次 setConfig 同时保存布局 + 展开目录 + lastActiveProjectId */
+export function flushProjectToConfig(projectId: string) {
+  // 取消所有待执行的防抖 timer
+  const layoutTimer = saveLayoutTimers.get(projectId);
+  if (layoutTimer) { clearTimeout(layoutTimer); saveLayoutTimers.delete(projectId); }
+  const expandTimer = saveExpandedTimers.get(projectId);
+  if (expandTimer) { clearTimeout(expandTimer); saveExpandedTimers.delete(projectId); }
+
+  const { config, projectStates, activeProjectId } = useAppStore.getState();
+  const ps = projectStates.get(projectId);
+  const savedLayout = ps ? serializeLayout(ps) : undefined;
+  const expandedDirs = Array.from(expandedDirsMap.get(projectId) ?? []);
+
+  const newConfig = {
+    ...config,
+    lastActiveProjectId: activeProjectId ?? config.lastActiveProjectId,
+    projects: config.projects.map((p) => {
+      if (p.id !== projectId) return p;
+      const updated = { ...p, expandedDirs };
+      if (savedLayout) updated.savedLayout = savedLayout;
+      return updated;
+    }),
+  };
+  useAppStore.getState().setConfig(newConfig);
+}
+
 /** 将当前 store 中的 config 写入磁盘（返回 Promise） */
 export function persistConfig() {
   return invoke('save_config', { config: useAppStore.getState().config });
@@ -356,11 +382,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       if (ps?.needsAttention) {
         newStates.set(id, { ...ps, needsAttention: false });
       }
-      const newConfig =
-        state.config.lastActiveProjectId === id
-          ? state.config
-          : { ...state.config, lastActiveProjectId: id };
-      return { activeProjectId: id, projectStates: newStates, config: newConfig };
+      return { activeProjectId: id, projectStates: newStates };
     }),
 
   addProject: (project) =>

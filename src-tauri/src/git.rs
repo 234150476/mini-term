@@ -1,7 +1,10 @@
-use git2::{Repository, Status, StatusOptions};
+use git2::{Repository, RepositoryOpenFlags, Status, StatusOptions};
 use pathdiff::diff_paths;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 // ---------------------------------------------------------------------------
 // Data structures
@@ -273,40 +276,90 @@ fn collect_worktrees_of(repo: &Repository) -> Vec<(String, PathBuf, Repository)>
     out
 }
 
-/// Scan project_path for git repositories.
-/// 除了项目自身 / 子目录下直接可见的仓库,还会把每个主仓库关联的 git worktree
-/// 作为独立条目加入,这样 History / Changes 面板就能看到并切换 worktree。
-fn find_repos(project_path: &Path) -> Vec<(String, PathBuf, Repository)> {
-    let mut repos = Vec::new();
+const MAX_DISCOVER_PARENTS: usize = 5;
 
-    // 1) 项目路径自身是否为仓库（使用 discover 保持向上搜索能力）
-    if let Ok(repo) = Repository::discover(project_path) {
+fn discover_repo_limited(start: &Path) -> Option<Repository> {
+    let mut ceiling = start.to_path_buf();
+    for _ in 0..MAX_DISCOVER_PARENTS {
+        match ceiling.parent() {
+            Some(p) if p != ceiling => ceiling = p.to_path_buf(),
+            _ => break,
+        }
+    }
+    Repository::open_ext(
+        start,
+        RepositoryOpenFlags::empty(),
+        &[&ceiling],
+    )
+    .ok()
+}
+
+struct RepoPathEntry {
+    name: String,
+    path: PathBuf,
+    is_worktree: bool,
+}
+
+static REPO_PATH_CACHE: std::sync::LazyLock<Mutex<HashMap<PathBuf, (Instant, Vec<RepoPathEntry>)>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
+const REPO_CACHE_TTL: Duration = Duration::from_secs(30);
+
+fn find_repos_cached_paths(project_path: &Path) -> Vec<RepoPathEntry> {
+    let key = project_path.to_path_buf();
+    {
+        let cache = REPO_PATH_CACHE.lock().unwrap();
+        if let Some((ts, entries)) = cache.get(&key) {
+            if ts.elapsed() < REPO_CACHE_TTL {
+                return entries.iter().map(|e| RepoPathEntry {
+                    name: e.name.clone(),
+                    path: e.path.clone(),
+                    is_worktree: e.is_worktree,
+                }).collect();
+            }
+        }
+    }
+    let entries = discover_repo_paths(project_path);
+    {
+        let mut cache = REPO_PATH_CACHE.lock().unwrap();
+        cache.insert(key, (Instant::now(), entries.iter().map(|e| RepoPathEntry {
+            name: e.name.clone(),
+            path: e.path.clone(),
+            is_worktree: e.is_worktree,
+        }).collect()));
+    }
+    entries
+}
+
+fn discover_repo_paths(project_path: &Path) -> Vec<RepoPathEntry> {
+    let mut entries = Vec::new();
+
+    if let Some(repo) = discover_repo_limited(project_path) {
         if let Some(workdir) = repo.workdir() {
             let repo_root = workdir.to_path_buf();
             let name = repo_root
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| "root".to_string());
-            // 在移动 repo 之前先把 worktree 条目收集好
-            let wt_entries = collect_worktrees_of(&repo);
-            repos.push((name, repo_root, repo));
-            repos.extend(wt_entries);
-            return repos;
+            for wt in collect_worktrees_of(&repo) {
+                entries.push(RepoPathEntry { name: wt.0, path: wt.1, is_worktree: true });
+            }
+            entries.insert(0, RepoPathEntry { name, path: repo_root, is_worktree: false });
+            return entries;
         }
     }
 
-    // 2) 递归扫描子目录查找 git 仓库（最多 5 层）
     const MAX_DEPTH: u32 = 5;
     const SKIP_DIRS: &[&str] = &[".git", "node_modules", "target", ".next", "dist", "__pycache__", ".superpowers"];
-    fn scan(dir: &Path, depth: u32, repos: &mut Vec<(String, PathBuf, Repository)>) {
+    fn scan(dir: &Path, depth: u32, entries: &mut Vec<RepoPathEntry>) {
         if depth > MAX_DEPTH {
             return;
         }
-        let entries = match std::fs::read_dir(dir) {
+        let dir_entries = match std::fs::read_dir(dir) {
             Ok(e) => e,
             Err(_) => return,
         };
-        for entry in entries.flatten() {
+        for entry in dir_entries.flatten() {
             let sub = entry.path();
             if !sub.is_dir() {
                 continue;
@@ -323,18 +376,32 @@ fn find_repos(project_path: &Path) -> Vec<(String, PathBuf, Repository)> {
                             .file_name()
                             .map(|n| n.to_string_lossy().to_string())
                             .unwrap_or_default();
-                        let wt_entries = collect_worktrees_of(&repo);
-                        repos.push((name, sub, repo));
-                        repos.extend(wt_entries);
-                        continue; // 找到仓库后不再深入其内部
+                        entries.push(RepoPathEntry { name, path: sub, is_worktree: false });
+                        for wt in collect_worktrees_of(&repo) {
+                            entries.push(RepoPathEntry { name: wt.0, path: wt.1, is_worktree: true });
+                        }
+                        continue;
                     }
                 }
             }
-            scan(&sub, depth + 1, repos);
+            scan(&sub, depth + 1, entries);
         }
     }
-    scan(project_path, 1, &mut repos);
+    scan(project_path, 1, &mut entries);
+    entries
+}
 
+/// Scan project_path for git repositories.
+/// 除了项目自身 / 子目录下直接可见的仓库,还会把每个主仓库关联的 git worktree
+/// 作为独立条目加入,这样 History / Changes 面板就能看到并切换 worktree。
+fn find_repos(project_path: &Path) -> Vec<(String, PathBuf, Repository)> {
+    let cached_paths = find_repos_cached_paths(project_path);
+    let mut repos = Vec::new();
+    for entry in cached_paths {
+        if let Ok(repo) = Repository::open(&entry.path) {
+            repos.push((entry.name, entry.path, repo));
+        }
+    }
     repos
 }
 
@@ -898,7 +965,8 @@ pub fn get_git_diff(
     let project = Path::new(&project_path);
     let abs_file = project.join(&file_path);
 
-    let repo = Repository::discover(&abs_file).map_err(|e| e.to_string())?;
+    let repo = discover_repo_limited(&abs_file)
+        .ok_or_else(|| format!("no git repository found within {} parents of {}", MAX_DISCOVER_PARENTS, abs_file.display()))?;
     let workdir = repo
         .workdir()
         .ok_or("bare repository not supported")?;

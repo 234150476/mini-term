@@ -301,6 +301,7 @@ export function FileTree() {
   const [loading, setLoading] = useState(() => !project || !getFileTreeCache(project.path));
   const [loadError, setLoadError] = useState<string | null>(null);
   const [diffTarget, setDiffTarget] = useState<GitFileStatus | null>(null);
+  const [viewFilePath, setViewFilePath] = useState<string | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootEntriesRef = useRef(rootEntries);
   rootEntriesRef.current = rootEntries;
@@ -354,6 +355,7 @@ export function FileTree() {
   useEffect(() => {
     if (!project) {
       setRootEntries([]);
+      setGitStatusMap(new Map());
       setLoading(false);
       setLoadError(null);
       return;
@@ -361,35 +363,31 @@ export function FileTree() {
     let cancelled = false;
     const projectPath = project.path;
     const cached = getFileTreeCache(projectPath);
+    if (cached) {
+      setRootEntries(cached.rootEntries);
+      rootEntriesRef.current = cached.rootEntries;
+      setGitStatusMap(cached.gitStatusMap);
+      gitStatusMapRef.current = cached.gitStatusMap;
+    } else {
+      setRootEntries([]);
+      setGitStatusMap(new Map());
+    }
     setLoading(!cached);
     setLoadError(null);
-    invoke<FileEntry[]>('list_directory', {
-      projectRoot: projectPath,
-      path: projectPath,
-    }).then((entries) => {
+    setDiffTarget(null);
+    setViewFilePath(null);
+    const listPromise = invoke<FileEntry[]>('list_directory', { projectRoot: projectPath, path: projectPath });
+    const statusPromise = invoke<GitFileStatus[]>('get_git_status', { projectPath }).catch(() => [] as GitFileStatus[]);
+    Promise.all([listPromise, statusPromise]).then(([entries, statuses]) => {
       if (cancelled) return;
+      const map = new Map<string, GitFileStatus>();
+      for (const s of statuses) map.set(s.path, s);
       setRootEntries(entries);
       rootEntriesRef.current = entries;
+      setGitStatusMap(map);
+      gitStatusMapRef.current = map;
       setLoading(false);
-      setFileTreeCache(projectPath, {
-        rootEntries: entries,
-        gitStatusMap: gitStatusMapRef.current,
-      });
-      invoke<GitFileStatus[]>('get_git_status', { projectPath })
-        .then((statuses) => {
-          if (cancelled) return;
-          const map = new Map<string, GitFileStatus>();
-          for (const s of statuses) map.set(s.path, s);
-          setGitStatusMap(map);
-          gitStatusMapRef.current = map;
-          setFileTreeCache(projectPath, {
-            rootEntries: rootEntriesRef.current,
-            gitStatusMap: map,
-          });
-        })
-        .catch(() => {
-          if (!cancelled) setGitStatusMap(new Map());
-        });
+      setFileTreeCache(projectPath, { rootEntries: entries, gitStatusMap: map });
     }).catch((err) => {
       if (cancelled) return;
       setLoading(false);
@@ -436,7 +434,6 @@ export function FileTree() {
     setDiffTarget(status);
   }, []);
 
-  const [viewFilePath, setViewFilePath] = useState<string | null>(null);
   const handleViewFile = useCallback((path: string) => {
     setViewFilePath(path);
   }, []);

@@ -41,8 +41,22 @@ export function GitHistory() {
   }, [project?.path]);
 
   useEffect(() => {
+    if (!project) {
+      setRepos([]);
+      setSelectedRepo('');
+      return;
+    }
+    const cached = getGitHistoryCache(project.path);
+    if (cached) {
+      setRepos(cached.repos);
+      setSelectedRepo(cached.selectedRepo);
+    } else {
+      setRepos([]);
+      setSelectedRepo('');
+    }
+    setRepoDropdownOpen(false);
     loadRepos();
-  }, [loadRepos]);
+  }, [project?.path]);
 
   // 点击外部关闭下拉
   useEffect(() => {

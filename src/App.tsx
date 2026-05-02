@@ -5,7 +5,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { ask } from '@tauri-apps/plugin-dialog';
-import { useAppStore, restoreLayout, flushLayoutToConfig, initExpandedDirs, flushExpandedDirsToConfig, persistConfig } from './store';
+import { useAppStore, restoreLayout, flushLayoutToConfig, initExpandedDirs, flushExpandedDirsToConfig, flushProjectToConfig, persistConfig } from './store';
 import { TerminalArea } from './components/TerminalArea';
 import { ProjectList } from './components/ProjectList';
 import { FileTree } from './components/FileTree';
@@ -155,10 +155,13 @@ export function App() {
       event.preventDefault();
       const confirmed = await ask('确定要关闭 Mini-Term 吗？', { title: '关闭确认', kind: 'warning' });
       if (!confirmed) return;
-      const { projectStates } = useAppStore.getState();
+      const { projectStates, activeProjectId: currentActive, config: currentConfig } = useAppStore.getState();
       for (const projectId of projectStates.keys()) {
         flushLayoutToConfig(projectId);
         flushExpandedDirsToConfig(projectId);
+      }
+      if (currentActive && currentConfig.lastActiveProjectId !== currentActive) {
+        useAppStore.getState().setConfig({ ...useAppStore.getState().config, lastActiveProjectId: currentActive });
       }
       // flush 只更新 store，最后统一写一次磁盘
       await persistConfig().catch(() => {});
@@ -167,12 +170,11 @@ export function App() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
-  // 切换项目时保存前一个项目的布局
+  // 切换项目时保存前一个项目的布局（合并为一次 setConfig）
   const prevProjectRef = useRef<string | null>(null);
   useEffect(() => {
     if (prevProjectRef.current && prevProjectRef.current !== activeProjectId) {
-      flushLayoutToConfig(prevProjectRef.current);
-      flushExpandedDirsToConfig(prevProjectRef.current);
+      flushProjectToConfig(prevProjectRef.current);
       persistConfig();
     }
     prevProjectRef.current = activeProjectId;
@@ -269,10 +271,10 @@ export function App() {
               onChange={saveMiddleColumnSizes}
             >
               <Allotment.Pane minSize={150} visible={config.filesVisible}>
-                <FileTree key={activeProjectId} />
+                <FileTree />
               </Allotment.Pane>
               <Allotment.Pane minSize={36} visible={config.gitVisible}>
-                <GitHistory key={activeProjectId} />
+                <GitHistory />
               </Allotment.Pane>
             </Allotment>
           </Allotment.Pane>
