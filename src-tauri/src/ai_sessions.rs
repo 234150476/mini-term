@@ -41,9 +41,49 @@ fn home_dir() -> Option<PathBuf> {
 /// 将项目路径编码为 Claude 项目目录名（`:` `\` `/` → `-`）
 fn encode_project_path(project_path: &str) -> String {
     project_path
+        .trim_end_matches(['/', '\\'])
         .replace(':', "-")
         .replace('\\', "-")
         .replace('/', "-")
+}
+
+/// 查找项目路径对应的所有 Claude 项目目录（含尾部斜杠导致的变体）
+fn find_claude_project_dirs(project_path: &str) -> Vec<PathBuf> {
+    let home = match home_dir() {
+        Some(h) => h,
+        None => return vec![],
+    };
+    let projects_dir = home.join(".claude").join("projects");
+    if !projects_dir.exists() {
+        return vec![];
+    }
+
+    let encoded = encode_project_path(project_path);
+
+    let entries = match fs::read_dir(&projects_dir) {
+        Ok(e) => e,
+        Err(_) => return vec![],
+    };
+
+    let mut dirs = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let dir_name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+        if dir_name == encoded
+            || (dir_name.starts_with(&encoded)
+                && dir_name[encoded.len()..].chars().all(|c| c == '-'))
+        {
+            dirs.push(path);
+        }
+    }
+
+    dirs
 }
 
 /// 路径统一化（小写 + 反斜杠，去尾部斜杠），用于 Windows 路径比较
@@ -57,28 +97,34 @@ fn normalize_path(path: &str) -> String {
 // ─── Claude Sessions ───────────────────────────────────────────
 
 fn get_claude_sessions(project_path: &str) -> Vec<AiSession> {
-    let home = match home_dir() {
-        Some(h) => h,
-        None => return vec![],
-    };
-
-    let encoded = encode_project_path(project_path);
-    let sessions_dir = home.join(".claude").join("projects").join(&encoded);
-
-    if !sessions_dir.exists() {
+    let project_dirs = find_claude_project_dirs(project_path);
+    if project_dirs.is_empty() {
         return vec![];
     }
 
-    let entries = match fs::read_dir(&sessions_dir) {
-        Ok(e) => e,
-        Err(_) => return vec![],
-    };
+    let mut paths: Vec<PathBuf> = Vec::new();
+    let mut seen_ids = std::collections::HashSet::new();
 
-    let mut paths: Vec<PathBuf> = entries
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("jsonl"))
-        .collect();
+    for dir in &project_dirs {
+        let entries = match fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("jsonl") {
+                let id = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                if seen_ids.insert(id) {
+                    paths.push(path);
+                }
+            }
+        }
+    }
+
     sort_newest_session_paths(&mut paths, MAX_CLAUDE_SESSION_FILES_TO_SCAN);
 
     let mut sessions = Vec::new();
@@ -407,17 +453,14 @@ fn read_claude_session_content(
     session_id: &str,
     project_path: &str,
 ) -> Result<Vec<AiSessionMessage>, String> {
-    let home = home_dir().ok_or_else(|| "无法获取 home 目录".to_string())?;
-    let encoded = encode_project_path(project_path);
-    let path = home
-        .join(".claude")
-        .join("projects")
-        .join(&encoded)
-        .join(format!("{}.jsonl", session_id));
+    let project_dirs = find_claude_project_dirs(project_path);
+    let filename = format!("{}.jsonl", session_id);
 
-    if !path.exists() {
-        return Err("会话文件不存在".to_string());
-    }
+    let path = project_dirs
+        .iter()
+        .map(|dir| dir.join(&filename))
+        .find(|p| p.exists())
+        .ok_or_else(|| "会话文件不存在".to_string())?;
 
     let file = fs::File::open(&path).map_err(|e| format!("无法打开文件: {}", e))?;
     let reader = BufReader::new(file);
