@@ -825,6 +825,122 @@ function SystemSettings() {
 
 // ─── AiNotificationSettings（AI 完成通知页）───
 
+function AiHookSettings() {
+  const [hookStatus, setHookStatus] = useState<{ port: number; running: boolean } | null>(null);
+  const [registering, setRegistering] = useState(false);
+  const [unregistering, setUnregistering] = useState(false);
+  const [resultMsg, setResultMsg] = useState('');
+  const [snippet, setSnippet] = useState('');
+  const [showSnippet, setShowSnippet] = useState(false);
+
+  useEffect(() => {
+    invoke<{ port: number; running: boolean }>('get_hook_status').then(setHookStatus);
+  }, []);
+
+  const handleRegister = useCallback(async () => {
+    setRegistering(true);
+    setResultMsg('');
+    try {
+      const msg = await invoke<string>('register_ai_hooks');
+      setResultMsg(msg);
+    } catch (e: unknown) {
+      setResultMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRegistering(false);
+    }
+  }, []);
+
+  const handleUnregister = useCallback(async () => {
+    setUnregistering(true);
+    setResultMsg('');
+    try {
+      const msg = await invoke<string>('unregister_ai_hooks');
+      setResultMsg(msg);
+    } catch (e: unknown) {
+      setResultMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUnregistering(false);
+    }
+  }, []);
+
+  const handleShowSnippet = useCallback(async () => {
+    if (showSnippet) {
+      setShowSnippet(false);
+      return;
+    }
+    try {
+      const s = await invoke<string>('get_hook_config_snippet');
+      setSnippet(s);
+      setShowSnippet(true);
+    } catch (e: unknown) {
+      setSnippet(e instanceof Error ? e.message : String(e));
+      setShowSnippet(true);
+    }
+  }, [showSnippet]);
+
+  return (
+    <div className="space-y-2">
+      <div className="text-base text-[var(--text-muted)] uppercase tracking-[0.1em] mb-2">
+        AI Hook 事件
+      </div>
+
+      <div className="px-3 py-2.5 rounded-[var(--radius-md)] bg-[var(--bg-base)] border border-[var(--border-subtle)]">
+        <div className="flex items-center gap-2 mb-1">
+          <div className={`w-2 h-2 rounded-full ${hookStatus?.running ? 'bg-[var(--color-success)]' : 'bg-[var(--border-strong)]'}`} />
+          <span className="text-base text-[var(--text-primary)]">
+            Hook 服务器 {hookStatus?.running ? `运行中 (端口 ${hookStatus.port})` : '未启动'}
+          </span>
+        </div>
+        <div className="text-sm text-[var(--text-muted)]">
+          通过 Claude Code / Codex 的 hook 系统获取精确的 AI 状态，替代进程轮询
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          className="flex-1 py-2 bg-[var(--accent)] text-[var(--bg-base)] rounded-[var(--radius-sm)] text-base hover:opacity-90 transition-opacity disabled:opacity-50"
+          onClick={handleRegister}
+          disabled={registering}
+        >
+          {registering ? '注册中...' : '一键注册 Hook'}
+        </button>
+        <button
+          className="flex-1 py-2 bg-[var(--bg-base)] text-[var(--text-secondary)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-base hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all disabled:opacity-50"
+          onClick={handleUnregister}
+          disabled={unregistering}
+        >
+          {unregistering ? '卸载中...' : '卸载 Hook'}
+        </button>
+      </div>
+
+      <button
+        className="w-full py-2 text-base text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
+        onClick={handleShowSnippet}
+      >
+        {showSnippet ? '收起配置片段' : '查看配置片段（手动粘贴）'}
+      </button>
+
+      {resultMsg && (
+        <div className="px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-base)] border border-[var(--border-default)] text-sm text-[var(--text-secondary)] whitespace-pre-wrap">
+          {resultMsg}
+        </div>
+      )}
+
+      {showSnippet && snippet && (
+        <div className="px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-base)] border border-[var(--border-default)] text-xs font-mono text-[var(--text-muted)] whitespace-pre-wrap max-h-64 overflow-y-auto select-all">
+          {snippet}
+        </div>
+      )}
+
+      <div className="pt-1 text-sm text-[var(--text-muted)]">
+        注册后 Claude Code / Codex 会在事件发生时通知 Mini-Term · 未注册时自动使用进程轮询检测
+      </div>
+    </div>
+  );
+}
+
+// ─── AiNotificationSettings（AI 完成通知页）───
+
 function AiNotificationSettings() {
   const config = useAppStore((s) => s.config);
   const setConfig = useAppStore((s) => s.setConfig);
@@ -950,6 +1066,10 @@ function AiNotificationSettings() {
 
       <div className="pt-3 text-sm text-[var(--text-muted)]">
         以上通知在 AI 任务（Claude / Codex）完成时触发
+      </div>
+
+      <div className="pt-6">
+        <AiHookSettings />
       </div>
     </div>
   );

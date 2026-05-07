@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build-hook": "cargo build --manifest-path src-tauri/Cargo.toml --bin miniterm-hook",
+    "pretauri": "npm run build-hook"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

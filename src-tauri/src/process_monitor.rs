@@ -1,3 +1,4 @@
+use crate::hook_server::HookState;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::thread;
@@ -14,7 +15,11 @@ pub struct PtyStatusChangePayload {
 /// AI 输出活跃超时阈值
 const AI_ACTIVE_TIMEOUT: Duration = Duration::from_secs(3);
 
-pub fn start_monitor(app: AppHandle, pty_manager: crate::pty::PtyManager) {
+pub fn start_monitor(
+    app: AppHandle,
+    pty_manager: crate::pty::PtyManager,
+    hook_state: HookState,
+) {
     thread::spawn(move || {
         let mut prev_statuses: HashMap<u32, String> = HashMap::new();
 
@@ -22,23 +27,32 @@ pub fn start_monitor(app: AppHandle, pty_manager: crate::pty::PtyManager) {
             let pty_ids = pty_manager.get_pty_ids();
 
             for pty_id in &pty_ids {
-                let status = if pty_manager.is_ai_session(*pty_id) {
+                // Hook 优先：最近 30s 内收到过 hook 事件时，以 hook 状态为准
+                let status = if hook_state.is_hook_active(*pty_id) {
+                    hook_state
+                        .get_status(*pty_id)
+                        .unwrap_or_else(|| "idle".to_string())
+                } else if pty_manager.is_ai_session(*pty_id) {
+                    // 降级到进程轮询逻辑
                     if pty_manager.has_recent_output(*pty_id, AI_ACTIVE_TIMEOUT) {
-                        "ai-working"
+                        "ai-working".to_string()
                     } else {
-                        "ai-idle"
+                        "ai-idle".to_string()
                     }
                 } else {
-                    "idle"
+                    "idle".to_string()
                 };
 
                 let prev = prev_statuses.get(pty_id);
-                if prev.map(|s| s.as_str()) != Some(status) {
-                    let _ = app.emit("pty-status-change", PtyStatusChangePayload {
-                        pty_id: *pty_id,
-                        status: status.to_string(),
-                    });
-                    prev_statuses.insert(*pty_id, status.to_string());
+                if prev.map(|s| s.as_str()) != Some(status.as_str()) {
+                    let _ = app.emit(
+                        "pty-status-change",
+                        PtyStatusChangePayload {
+                            pty_id: *pty_id,
+                            status: status.clone(),
+                        },
+                    );
+                    prev_statuses.insert(*pty_id, status);
                 }
             }
 

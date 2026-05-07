@@ -4,9 +4,11 @@ mod config;
 mod editor;
 mod fs;
 mod git;
-mod search;
+mod hook_registry;
+mod hook_server;
 mod process_monitor;
 mod pty;
+mod search;
 
 use tauri::Manager;
 
@@ -35,9 +37,18 @@ pub fn run() {
             // 必须发生在任何 read_config 之前。
             config::migrate_legacy_app_data(app.handle());
             clipboard::cleanup_old_clipboard_images();
+
+            // 初始化 hook 状态并注册为 Tauri managed state
+            let hook_state = hook_server::HookState::new();
+            app.manage(hook_state.clone());
+
+            // 启动 hook HTTP 服务器（后台线程）
+            hook_server::start_hook_server(app.handle().clone(), hook_state.clone());
+
+            // 启动进程监控（传入 hook_state 实现 hook 优先 + 轮询降级）
             let pty_manager = app.state::<crate::pty::PtyManager>();
             let pty_clone = pty_manager.inner().clone();
-            process_monitor::start_monitor(app.handle().clone(), pty_clone);
+            process_monitor::start_monitor(app.handle().clone(), pty_clone, hook_state);
             Ok(())
         })
         .on_window_event(|_window, event| {
@@ -97,6 +108,10 @@ pub fn run() {
             clipboard::save_clipboard_text,
             search::start_search,
             search::cancel_search,
+            hook_registry::register_ai_hooks,
+            hook_registry::unregister_ai_hooks,
+            hook_registry::get_hook_config_snippet,
+            hook_registry::get_hook_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

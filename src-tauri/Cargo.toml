@@ -4,6 +4,7 @@ version = "0.3.10"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
+default-run = "tauri-app"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,6 +14,10 @@ edition = "2021"
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "miniterm-hook"
+path = "src/bin/miniterm-hook.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -32,6 +37,8 @@ tauri-plugin-window-state = "2"
 dirs = "6"
 git2 = "0.19"
 pathdiff = "0.2"
+tiny_http = "0.12"
+toml_edit = "0.22"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [

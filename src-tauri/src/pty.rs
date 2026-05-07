@@ -552,14 +552,19 @@ pub fn create_pty(
     cmd.env("LC_CTYPE", "C.UTF-8");
     cmd.env("LESSCHARSET", "utf-8");
 
-    let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
-
+    // 先获取 pty_id，以便注入环境变量供 hook 子进程继承
     let pty_id = {
         let mut next = state.next_id.lock().unwrap();
         let id = *next;
         *next += 1;
         id
     };
+
+    // 注入 PTY ID 环境变量，Claude Code / Codex 的 hook 子进程可通过此变量
+    // 关联到具体的终端 pane
+    cmd.env("MINITERM_PTY_ID", pty_id.to_string());
+
+    let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
 
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
     let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
@@ -835,7 +840,11 @@ pub fn resize_pty(
 }
 
 #[tauri::command]
-pub fn kill_pty(state: tauri::State<'_, PtyManager>, pty_id: u32) -> Result<(), String> {
+pub fn kill_pty(
+    state: tauri::State<'_, PtyManager>,
+    hook_state: tauri::State<'_, crate::hook_server::HookState>,
+    pty_id: u32,
+) -> Result<(), String> {
     // Remove metadata maps immediately so subsequent lookups return nothing.
     let instance = state.instances.lock().unwrap().remove(&pty_id);
     state.last_output.lock().unwrap().remove(&pty_id);
@@ -849,6 +858,8 @@ pub fn kill_pty(state: tauri::State<'_, PtyManager>, pty_id: u32) -> Result<(), 
         .lock()
         .unwrap()
         .remove(&pty_id);
+    // 清理 hook 状态
+    hook_state.remove(pty_id);
 
     // Drop the PTY instance on a background thread.
     //
