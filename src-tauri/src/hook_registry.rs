@@ -112,7 +112,7 @@ fn register_claude_hooks(hook_path: &str) -> Result<String, String> {
     };
 
     // 确保 hooks 对象存在
-    if !settings.get("hooks").is_some() {
+    if settings.get("hooks").is_none() {
         settings["hooks"] = serde_json::json!({});
     }
 
@@ -213,7 +213,7 @@ fn unregister_claude_hooks() -> Result<String, String> {
         // 清理空的事件数组
         let empty_keys: Vec<String> = hooks
             .iter()
-            .filter(|(_, v)| v.as_array().map_or(false, |a| a.is_empty()))
+            .filter(|(_, v)| v.as_array().is_some_and(|a| a.is_empty()))
             .map(|(k, _)| k.clone())
             .collect();
         for key in empty_keys {
@@ -315,7 +315,7 @@ fn register_codex_hooks(hook_path: &str) -> Result<String, String> {
     };
 
     // 确保 hooks 对象存在
-    if !config.get("hooks").is_some() {
+    if config.get("hooks").is_none() {
         config["hooks"] = serde_json::json!({});
     }
 
@@ -425,7 +425,7 @@ fn unregister_codex_hooks() -> Result<String, String> {
         // 清理空的事件数组
         let empty_keys: Vec<String> = hooks
             .iter()
-            .filter(|(_, v)| v.as_array().map_or(false, |a| a.is_empty()))
+            .filter(|(_, v)| v.as_array().is_some_and(|a| a.is_empty()))
             .map(|(k, _)| k.clone())
             .collect();
         for key in empty_keys {

@@ -159,10 +159,11 @@ fn send_http_post(port: u16, body: &str) {
     let addr = format!("127.0.0.1:{}", port);
 
     // 连接超时 100ms
-    let stream = match TcpStream::connect_timeout(
-        &addr.parse().unwrap(),
-        Duration::from_millis(100),
-    ) {
+    let sock_addr = match addr.parse() {
+        Ok(a) => a,
+        Err(_) => return,
+    };
+    let stream = match TcpStream::connect_timeout(&sock_addr, Duration::from_millis(100)) {
         Ok(s) => s,
         Err(_) => return, // 连接失败静默退出
     };

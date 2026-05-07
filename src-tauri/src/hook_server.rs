@@ -14,9 +14,6 @@ use tauri::{AppHandle, Emitter, Manager};
 const DEFAULT_PORT: u16 = 23456;
 /// 端口冲突时最多尝试的端口数
 const MAX_PORT_ATTEMPTS: u16 = 5;
-/// hook 事件有效期（秒），超过此时间降级回 process_monitor 轮询
-const HOOK_ACTIVE_TIMEOUT_SECS: u64 = 30;
-
 /// Hook 事件的 JSON payload
 #[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)] // 保留完整字段供未来 UI 细化使用
@@ -48,6 +45,8 @@ pub struct HookStatusInfo {
 pub struct HookState {
     last_hook_time: Arc<Mutex<HashMap<u32, Instant>>>,
     last_hook_status: Arc<Mutex<HashMap<u32, String>>>,
+    /// 记录哪些 PTY 曾经收到过 hook 事件（一旦标记，永不降级回轮询）
+    hook_enabled: Arc<Mutex<std::collections::HashSet<u32>>>,
     port: Arc<Mutex<u16>>,
 }
 
@@ -56,16 +55,16 @@ impl HookState {
         Self {
             last_hook_time: Arc::new(Mutex::new(HashMap::new())),
             last_hook_status: Arc::new(Mutex::new(HashMap::new())),
+            hook_enabled: Arc::new(Mutex::new(std::collections::HashSet::new())),
             port: Arc::new(Mutex::new(0)),
         }
     }
 
-    /// 检查指定 PTY 在最近 30s 内是否收到过 hook 事件
-    pub fn is_hook_active(&self, pty_id: u32) -> bool {
-        let map = self.last_hook_time.lock().unwrap();
-        map.get(&pty_id).map_or(false, |t| {
-            t.elapsed().as_secs() < HOOK_ACTIVE_TIMEOUT_SECS
-        })
+    /// 检查指定 PTY 是否已启用 hook（曾经收到过 hook 事件）
+    ///
+    /// 一旦启用，完全信任 hook 状态，不再降级回进程轮询。
+    pub fn is_hook_enabled(&self, pty_id: u32) -> bool {
+        self.hook_enabled.lock().unwrap().contains(&pty_id)
     }
 
     /// 获取指定 PTY 的 hook 状态
@@ -75,6 +74,7 @@ impl HookState {
 
     /// 更新指定 PTY 的 hook 状态
     fn update(&self, pty_id: u32, status: String) {
+        self.hook_enabled.lock().unwrap().insert(pty_id);
         self.last_hook_time
             .lock()
             .unwrap()
@@ -87,6 +87,7 @@ impl HookState {
 
     /// 移除指定 PTY 的 hook 状态（PTY 关闭时调用）
     pub fn remove(&self, pty_id: u32) {
+        self.hook_enabled.lock().unwrap().remove(&pty_id);
         self.last_hook_time.lock().unwrap().remove(&pty_id);
         self.last_hook_status.lock().unwrap().remove(&pty_id);
     }

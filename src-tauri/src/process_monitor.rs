@@ -27,13 +27,13 @@ pub fn start_monitor(
             let pty_ids = pty_manager.get_pty_ids();
 
             for pty_id in &pty_ids {
-                // Hook 优先：最近 30s 内收到过 hook 事件时，以 hook 状态为准
-                let status = if hook_state.is_hook_active(*pty_id) {
+                // Hook 优先：该 PTY 启用了 hook 时完全信任 hook 状态，不做轮询
+                let status = if hook_state.is_hook_enabled(*pty_id) {
                     hook_state
                         .get_status(*pty_id)
                         .unwrap_or_else(|| "idle".to_string())
                 } else if pty_manager.is_ai_session(*pty_id) {
-                    // 降级到进程轮询逻辑
+                    // 未启用 hook 时降级到进程轮询逻辑
                     if pty_manager.has_recent_output(*pty_id, AI_ACTIVE_TIMEOUT) {
                         "ai-working".to_string()
                     } else {

@@ -519,6 +519,7 @@ impl PtyManager {
 pub fn create_pty(
     app: AppHandle,
     state: tauri::State<'_, PtyManager>,
+    hook_state: tauri::State<'_, crate::hook_server::HookState>,
     shell: String,
     args: Vec<String>,
     cwd: String,
@@ -563,6 +564,12 @@ pub fn create_pty(
     // 注入 PTY ID 环境变量，Claude Code / Codex 的 hook 子进程可通过此变量
     // 关联到具体的终端 pane
     cmd.env("MINITERM_PTY_ID", pty_id.to_string());
+
+    // 注入 hook 服务器端口，避免 miniterm-hook 每次都从文件读取端口
+    let hook_port = hook_state.get_port();
+    if hook_port > 0 {
+        cmd.env("MINITERM_HOOK_PORT", hook_port.to_string());
+    }
 
     let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
 
