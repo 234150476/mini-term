@@ -544,8 +544,13 @@ pub fn create_pty(
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     // Ensure UTF-8 encoding for proper CJK/emoji rendering.
-    // Only set LC_CTYPE to avoid overriding the user's locale preferences.
-    cmd.env("LC_CTYPE", "UTF-8");
+    // On Windows, Git for Windows (MSYS2) checks LANG to determine terminal encoding;
+    // without it, git falls back to the system ANSI code page (e.g. GBK on Chinese Windows),
+    // causing mojibake in commit messages. LESSCHARSET tells git's pager (less) to handle
+    // UTF-8 bytes instead of escaping them as <XX> hex sequences.
+    cmd.env("LANG", "C.UTF-8");
+    cmd.env("LC_CTYPE", "C.UTF-8");
+    cmd.env("LESSCHARSET", "utf-8");
 
     let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
 
