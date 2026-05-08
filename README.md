@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.3.10-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.4.0-blue" alt="version">
   <img src="https://img.shields.io/badge/platform-Windows-0078D4" alt="platform">
   <img src="https://img.shields.io/badge/macOS%20%7C%20Linux-experimental-lightgrey" alt="platform-experimental">
   <img src="https://img.shields.io/badge/Tauri-v2-orange" alt="tauri">
@@ -59,7 +59,8 @@ Mini-Term 用一个轻量桌面应用解决以上所有问题。
 
 ### AI 进程感知
 
-- **实时状态检测** — 500ms 轮询子进程名，自动识别 Claude / Codex / OpenCode，显示 idle / working / error 状态
+- **Hook 事件系统** — 接入 Claude Code / Codex 官方 Hook API，接收 AI 工具事件（SessionStart / End、ToolUse 等），比进程轮询更精准及时；内置 `miniterm-hook` CLI 工具供 Hook 系统调用，自动 POST 事件到本地服务器；设置界面一键注册 / 卸载 Hook 配置，合并而非覆盖用户已有 hook
+- **实时状态检测** — Hook 优先 + 500ms 进程轮询降级，自动识别 Claude / Codex / OpenCode，显示 idle / working / error 状态
 - **状态聚合** — 面板 → 标签页 → 项目逐层聚合，优先级 `error > ai-working > ai-idle > idle`
 - **完成提醒三件套** — AI 任务从 working → idle 时立刻触发：
   - 右下角 Toast 桌面通知（仅非活跃项目弹出，同项目去重）
@@ -78,8 +79,8 @@ Mini-Term 用一个轻量桌面应用解决以上所有问题。
 - **拖拽添加项目** — 从资源管理器拖拽文件夹到项目列表即可快速添加，自动识别文件 / 文件夹 / 重复项目并给出视觉反馈
 - **嵌套分组** — 最多 3 级项目分组，拖拽排序，折叠 / 展开
 - **文件树** — 集成目录浏览器，嵌套 `.gitignore` 置灰（每层子目录的忽略规则与 `!pattern` 白名单都会生效，与 git 行为一致），`notify` 文件监听实时刷新
-- **文件操作** — 文件树内新建文件 / 文件夹、重命名、查看内容（Markdown 渲染支持 HTML 标签和外部图片，二进制与超大文件友好提示）
-- **VS Code 快捷打开** — 文件树右上角按钮一键用配置的 VS Code 可执行文件打开当前项目，路径可在「设置 → 系统设置 → 外部编辑器」自定义
+- **文件操作** — 文件树内新建文件 / 文件夹、重命名、删除、查看内容（Markdown 渲染支持 HTML 标签和外部图片，二进制与超大文件友好提示）
+- **外部编辑器打开** — 文件树右上角按钮一键用配置的编辑器（默认 VS Code）打开当前项目，路径可在「设置 → 系统设置 → 外部编辑器」自定义；文件可用系统默认应用打开
 
 ### Git 集成
 
@@ -118,7 +119,7 @@ Mini-Term 用一个轻量桌面应用解决以上所有问题。
 | Git | git2 0.19 |
 | 文件监听 | notify 7 + ignore 0.4（.gitignore 过滤） |
 | Tauri 插件 | `window-state` · `clipboard-manager` · `dialog` · `opener` |
-| 测试覆盖 | 64 个 Rust 单元测试（pty / fs / config） |
+| 测试覆盖 | 81 个 Rust 单元测试（pty / fs / config / hook） |
 
 ## 快速开始
 
@@ -183,20 +184,25 @@ mini-term/
 │   │   ├── TerminalArea.tsx      # 标签管理 + 分屏树操作
 │   │   ├── SplitLayout.tsx       # 递归渲染 SplitNode 分屏树
 │   │   ├── TerminalInstance.tsx  # xterm.js 实例 + 右键菜单 + 文件拖拽
-│   │   ├── TabBar.tsx            # 标签栏
+│   │   ├── PaneGroup.tsx         # 分屏分组容器
+│   │   ├── MarkerList.tsx        # AI 任务标记下拉列表
 │   │   ├── GitHistory.tsx        # Git 仓库树 + 提交历史 + Pull / Push
-│   │   ├── GitChanges.tsx       # 源码控制面板（stage / unstage / commit）
+│   │   ├── GitHistoryContent.tsx # Git 提交历史内容渲染
+│   │   ├── GitChanges.tsx        # 源码控制面板（stage / unstage / commit）
 │   │   ├── CommitDiffModal.tsx   # 提交 Diff 查看器
 │   │   ├── DiffModal.tsx         # 工作区文件 Diff 查看器
 │   │   ├── SearchModal.tsx       # 全局文件搜索弹窗
 │   │   ├── FileViewerModal.tsx   # 文件内容查看器
-│   │   ├── SettingsModal.tsx     # 设置弹窗（主题 / 字体 / Shell / AI 通知）
+│   │   ├── SessionViewerModal.tsx # AI 会话内容查看器（Markdown 渲染）
+│   │   ├── SettingsModal.tsx     # 设置弹窗（主题 / 字体 / Shell / AI 通知 / Hook）
 │   │   ├── ToastContainer.tsx    # AI 完成 Toast 通知
-│   │   ├── ActivityBar.tsx        # Activity Bar 侧边栏（面板显隐 + AI 状态角标）
+│   │   ├── ActivityBar.tsx       # Activity Bar 侧边栏（面板显隐 + AI 状态角标）
 │   │   ├── DoneTag.tsx           # 项目列表 DONE 徽章
 │   │   └── StatusDot.tsx         # 状态指示点
 │   ├── hooks/
-│   │   └── useTauriEvent.ts      # Tauri 事件订阅封装
+│   │   ├── useTauriEvent.ts      # Tauri 事件订阅封装
+│   │   ├── useAiSubmitMarker.ts  # AI 会话 Enter 打点
+│   │   └── useMarkerHotkeys.ts   # 标记间跳转快捷键
 │   └── utils/
 │       ├── contextMenu.ts        # 右键菜单 DOM 实现
 │       ├── dragState.ts          # 项目树拖拽状态
@@ -207,15 +213,19 @@ mini-term/
 │       ├── themeManager.ts       # 主题切换 + 系统配色监听
 │       └── updateChecker.ts      # GitHub Release 版本检查
 ├── src-tauri/                    # Rust 后端
-│   └── src/
-│       ├── lib.rs                # Tauri 初始化与命令 / 插件注册
-│       ├── pty.rs                # PTY 生命周期 + AI 会话识别
-│       ├── process_monitor.rs    # 子进程状态轮询（500ms）
-│       ├── config.rs             # 配置持久化 + 版本迁移
-│       ├── fs.rs                 # 目录列表 / 监听 / 新建 / 重命名
-│       ├── git.rs                # Git 操作（状态 / Diff / Log / Pull / Push）
-│       ├── search.rs             # 全局文件搜索（文件名 + 内容，流式推送）
-│       └── ai_sessions.rs        # Claude / Codex 会话记录读取
+│   ├── src/
+│   │   ├── lib.rs                # Tauri 初始化与命令 / 插件注册
+│   │   ├── pty.rs                # PTY 生命周期 + AI 会话识别
+│   │   ├── process_monitor.rs    # 子进程状态轮询（500ms）+ Hook 优先
+│   │   ├── config.rs             # 配置持久化 + 版本迁移
+│   │   ├── fs.rs                 # 目录列表 / 监听 / 新建 / 重命名 / 删除
+│   │   ├── git.rs                # Git 操作（状态 / Diff / Log / Pull / Push）
+│   │   ├── search.rs             # 全局文件搜索（文件名 + 内容，流式推送）
+│   │   ├── ai_sessions.rs        # Claude / Codex 会话记录读取
+│   │   ├── hook_server.rs        # Hook HTTP 服务器（接收 AI 工具事件）
+│   │   └── hook_registry.rs      # Hook 注册 / 卸载（Claude Code + Codex）
+│   └── src/bin/
+│       └── miniterm-hook.rs      # Hook CLI 小工具（被 AI 工具 hook 调用）
 └── package.json
 ```
 
@@ -234,7 +244,7 @@ ai-working → ai-idle → Toast + DONE Tag + requestUserAttention
 
 ### Tauri 接口一览
 
-- **Commands（39 个）** — PTY: `create_pty` · `write_pty` · `resize_pty` · `kill_pty`；FS: `list_directory` · `read_file_content` · `watch_directory` · `unwatch_directory` · `create_file` · `create_directory` · `rename_entry` · `filter_directories`；Search: `start_search` · `cancel_search`；Git: `get_git_status` · `get_git_diff` · `discover_git_repos` · `get_git_log` · `get_repo_branches` · `get_commit_files` · `get_commit_file_diff` · `git_pull` · `git_push` · `get_changes_status` · `git_stage` · `git_unstage` · `git_stage_all` · `git_unstage_all` · `git_commit` · `git_discard_file`；Config: `load_config` · `save_config`；Editor: `open_in_vscode`；Clipboard: `read_clipboard_image` · `save_clipboard_text`；AI: `get_ai_sessions` · `get_ai_session_content`
+- **Commands（43 个）** — PTY: `create_pty` · `write_pty` · `resize_pty` · `kill_pty`；FS: `list_directory` · `read_file_content` · `watch_directory` · `unwatch_directory` · `create_file` · `create_directory` · `rename_entry` · `delete_entry` · `filter_directories`；Search: `start_search` · `cancel_search`；Git: `get_git_status` · `get_git_diff` · `discover_git_repos` · `get_git_log` · `get_repo_branches` · `get_commit_files` · `get_commit_file_diff` · `git_pull` · `git_push` · `get_changes_status` · `git_stage` · `git_unstage` · `git_stage_all` · `git_unstage_all` · `git_commit` · `git_discard_file`；Config: `load_config` · `save_config`；Editor: `open_in_editor` · `open_path_with_default_app`；Clipboard: `read_clipboard_image` · `save_clipboard_text`；AI: `get_ai_sessions` · `get_ai_session_content`；Hook: `register_ai_hooks` · `unregister_ai_hooks` · `get_hook_config_snippet` · `get_hook_status`
 - **Events（后端 → 前端）** — `pty-output` · `pty-exit` · `pty-status-change` · `fs-change` · `search-results` · `search-complete`
 
 ### 状态优先级
