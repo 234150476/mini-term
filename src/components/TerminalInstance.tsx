@@ -117,7 +117,16 @@ export function TerminalInstance({ ptyId }: Props) {
     return () => window.removeEventListener('theme-changed', handler);
   }, [ptyId]);
 
-  // 自定义鼠标拖拽（替代 HTML5 DnD，规避 WebView2 dragDropEnabled 拦截）
+  // 外部拖拽（资源管理器 → 终端）：监听 useExternalFileDrop 派发的自定义事件
+  useEffect(() => {
+    const handler = (e: Event) => {
+      setFileDrag((e as CustomEvent<number | null>).detail === ptyId);
+    };
+    window.addEventListener('external-file-drag', handler);
+    return () => window.removeEventListener('external-file-drag', handler);
+  }, [ptyId]);
+
+  // 内部拖拽（FileTree → 终端）：自定义鼠标事件，规避 WebView2 dragDropEnabled 拦截
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
   const handleMouseMove = useCallback(() => {
@@ -163,6 +172,7 @@ export function TerminalInstance({ ptyId }: Props) {
         className="flex-1 relative bg-[var(--bg-terminal)]"
         style={termStyle}
         data-terminal-drop
+        data-pty-id={ptyId}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         onMouseUp={handleMouseUp}

@@ -17,6 +17,7 @@ import { ToastContainer } from './components/ToastContainer';
 import { useTauriEvent } from './hooks/useTauriEvent';
 import { useAiSubmitMarker } from './hooks/useAiSubmitMarker';
 import { useMarkerHotkeys } from './hooks/useMarkerHotkeys';
+import { useExternalFileDrop } from './hooks/useExternalFileDrop';
 import { checkForUpdate, type ReleaseInfo } from './utils/updateChecker';
 import { applyTheme } from './utils/themeManager';
 import { markAiPty, updateAllTerminalThemes } from './utils/terminalCache';
@@ -147,6 +148,7 @@ export function App() {
 
   useAiSubmitMarker();
   useMarkerHotkeys();
+  useExternalFileDrop();
 
   // 关闭窗口时二次确认并保存布局
   useEffect(() => {
