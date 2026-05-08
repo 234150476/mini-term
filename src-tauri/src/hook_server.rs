@@ -48,6 +48,8 @@ pub struct HookState {
     /// 记录哪些 PTY 曾经收到过 hook 事件（一旦标记，永不降级回轮询）
     hook_enabled: Arc<Mutex<std::collections::HashSet<u32>>>,
     port: Arc<Mutex<u16>>,
+    /// 保存 server 实例，供运行时停止（Arc 共享给监听线程）
+    server: Arc<Mutex<Option<Arc<tiny_http::Server>>>>,
 }
 
 impl HookState {
@@ -57,6 +59,7 @@ impl HookState {
             last_hook_status: Arc::new(Mutex::new(HashMap::new())),
             hook_enabled: Arc::new(Mutex::new(std::collections::HashSet::new())),
             port: Arc::new(Mutex::new(0)),
+            server: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -101,6 +104,16 @@ impl HookState {
     fn set_port(&self, port: u16) {
         *self.port.lock().unwrap() = port;
     }
+
+    /// 保存 server 实例
+    fn set_server(&self, server: Option<Arc<tiny_http::Server>>) {
+        *self.server.lock().unwrap() = server;
+    }
+
+    /// 检查 server 是否正在运行
+    pub fn is_server_running(&self) -> bool {
+        self.server.lock().unwrap().is_some()
+    }
 }
 
 /// 将 hook 事件名映射为 PTY 状态
@@ -124,39 +137,51 @@ fn map_event_to_status(event: &str) -> Option<&'static str> {
 ///
 /// 在后台线程监听，接收 hook 事件后通过 Tauri event 通知前端。
 /// 端口从 DEFAULT_PORT 开始尝试，冲突时自动递增。
-pub fn start_hook_server(app: AppHandle, hook_state: HookState) {
-    std::thread::spawn(move || {
-        // 尝试绑定端口
-        let server = {
-            let mut bound = None;
-            for offset in 0..MAX_PORT_ATTEMPTS {
-                let port = DEFAULT_PORT + offset;
-                let addr = format!("127.0.0.1:{}", port);
-                match tiny_http::Server::http(&addr) {
-                    Ok(s) => {
-                        eprintln!("[hook-server] 监听 {}", addr);
-                        hook_state.set_port(port);
-                        bound = Some((s, port));
-                        break;
-                    }
-                    Err(e) => {
-                        eprintln!("[hook-server] 端口 {} 被占用: {}", port, e);
-                    }
+/// 返回 `Err` 表示无法绑定端口，调用方应将错误提示给用户。
+pub fn start_hook_server(app: AppHandle, hook_state: HookState) -> Result<(), String> {
+    // 如果已经在运行，不重复启动
+    if hook_state.is_server_running() {
+        eprintln!("[hook-server] 服务器已在运行，跳过启动");
+        return Ok(());
+    }
+
+    // 在当前线程绑定端口，以便同步获取 server 实例
+    let bound = {
+        let mut result = None;
+        for offset in 0..MAX_PORT_ATTEMPTS {
+            let port = DEFAULT_PORT + offset;
+            let addr = format!("127.0.0.1:{}", port);
+            match tiny_http::Server::http(&addr) {
+                Ok(s) => {
+                    eprintln!("[hook-server] 监听 {}", addr);
+                    hook_state.set_port(port);
+                    result = Some((s, port));
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("[hook-server] 端口 {} 被占用: {}", port, e);
                 }
             }
-            bound
-        };
+        }
+        result
+    };
 
-        let (server, port) = match server {
-            Some(s) => s,
-            None => {
-                eprintln!("[hook-server] 无法绑定任何端口，hook 服务器未启动");
-                return;
-            }
-        };
+    let (server, port) = match bound {
+        Some(s) => s,
+        None => {
+            eprintln!("[hook-server] 无法绑定任何端口，hook 服务器未启动");
+            return Err("无法绑定端口 (23456-23460)，hook 服务器启动失败".to_string());
+        }
+    };
 
-        // 写入端口文件
-        write_port_file(&app, port);
+    // 用 Arc 包装 server，共享给 HookState 和监听线程
+    let server = Arc::new(server);
+    hook_state.set_server(Some(server.clone()));
+
+    // 写入端口文件
+    write_port_file(&app, port);
+
+    std::thread::spawn(move || {
 
         // 处理请求
         for mut request in server.incoming_requests() {
@@ -236,6 +261,40 @@ pub fn start_hook_server(app: AppHandle, hook_state: HookState) {
             }
         }
     });
+
+    Ok(())
+}
+
+/// 停止 hook HTTP 服务器
+///
+/// 取出保存的 server 实例，调用 `unblock()` 中断阻塞循环，
+/// 清理端口文件并重置端口。
+pub fn stop_hook_server(hook_state: &HookState, app: &AppHandle) {
+    let server = hook_state.server.lock().unwrap().take();
+    if let Some(s) = server {
+        s.unblock();
+        eprintln!("[hook-server] 服务器已停止");
+    }
+    hook_state.set_port(0);
+    // 清理端口文件
+    delete_port_file(app);
+}
+
+/// 运行时切换 hook server 开关
+#[tauri::command]
+pub fn toggle_hook_server(
+    app: AppHandle,
+    hook_state: tauri::State<'_, HookState>,
+    enabled: bool,
+) -> Result<(), String> {
+    if enabled {
+        if !hook_state.is_server_running() {
+            start_hook_server(app, hook_state.inner().clone())?;
+        }
+    } else if hook_state.is_server_running() {
+        stop_hook_server(hook_state.inner(), &app);
+    }
+    Ok(())
 }
 
 /// 将端口信息写入 app_data_dir/hook-server.json
@@ -252,6 +311,24 @@ fn write_port_file(app: &AppHandle, port: u16) {
             );
         } else {
             eprintln!("[hook-server] 端口文件已写入 {}", path.display());
+        }
+    }
+}
+
+/// 删除端口文件 app_data_dir/hook-server.json
+fn delete_port_file(app: &AppHandle) {
+    if let Ok(dir) = app.path().app_data_dir() {
+        let path = dir.join("hook-server.json");
+        if path.exists() {
+            if let Err(e) = std::fs::remove_file(&path) {
+                eprintln!(
+                    "[hook-server] 删除端口文件失败 {}: {}",
+                    path.display(),
+                    e
+                );
+            } else {
+                eprintln!("[hook-server] 端口文件已删除 {}", path.display());
+            }
         }
     }
 }

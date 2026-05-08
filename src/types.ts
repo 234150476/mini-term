@@ -39,6 +39,7 @@ export interface AppConfig {
   filesVisible: boolean;
   gitVisible: boolean;
   lastActiveProjectId?: string;
+  hookEnabled: boolean;
 }
 
 export interface ProjectConfig {

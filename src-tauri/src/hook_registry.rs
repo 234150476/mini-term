@@ -532,9 +532,8 @@ pub fn get_hook_status(
     _app: AppHandle,
     hook_state: tauri::State<'_, HookState>,
 ) -> Result<HookStatusInfo, String> {
-    let port = hook_state.get_port();
     Ok(HookStatusInfo {
-        port,
-        running: port > 0,
+        port: hook_state.get_port(),
+        running: hook_state.is_server_running(),
     })
 }

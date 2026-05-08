@@ -93,6 +93,8 @@ pub struct AppConfig {
     pub git_visible: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_active_project_id: Option<String>,
+    #[serde(default)]
+    pub hook_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,6 +229,7 @@ impl Default for AppConfig {
             files_visible: true,
             git_visible: true,
             last_active_project_id: None,
+            hook_enabled: false,
         }
     }
 }

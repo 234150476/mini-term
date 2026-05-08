@@ -42,8 +42,13 @@ pub fn run() {
             let hook_state = hook_server::HookState::new();
             app.manage(hook_state.clone());
 
-            // 启动 hook HTTP 服务器（后台线程）
-            hook_server::start_hook_server(app.handle().clone(), hook_state.clone());
+            // 读取配置，仅当 hookEnabled == true 时才启动 hook server
+            let app_config = config::read_config(app.handle());
+            if app_config.hook_enabled {
+                if let Err(e) = hook_server::start_hook_server(app.handle().clone(), hook_state.clone()) {
+                    eprintln!("[setup] hook server 启动失败: {}", e);
+                }
+            }
 
             // 启动进程监控（传入 hook_state 实现 hook 优先 + 轮询降级）
             let pty_manager = app.state::<crate::pty::PtyManager>();
@@ -112,6 +117,7 @@ pub fn run() {
             hook_registry::unregister_ai_hooks,
             hook_registry::get_hook_config_snippet,
             hook_registry::get_hook_status,
+            hook_server::toggle_hook_server,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
