@@ -241,9 +241,12 @@ fn codex_event_timeout(event: &str) -> u64 {
 }
 
 /// 为 Codex 构建单个 hook 条目
+///
+/// Codex 在 Windows 上使用 PowerShell 执行 hook 命令，
+/// 需要用 call operator (`& "path"`) 格式。
 fn build_codex_hook_entry(hook_path: &str, event: &str) -> Value {
     let command = if cfg!(windows) {
-        format!("\"{}\" {}", hook_path, event)
+        format!("& \"{}\" {}", hook_path, event)
     } else {
         format!("{} {}", hook_path, event)
     };
