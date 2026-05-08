@@ -484,9 +484,9 @@ pub fn unregister_ai_hooks(_app: AppHandle) -> Result<String, String> {
     Ok(results.join("\n"))
 }
 
-/// 获取 hook 配置片段供用户手动粘贴
+/// 获取 hook 配置片段供用户手动粘贴（结构化返回）
 #[tauri::command]
-pub fn get_hook_config_snippet(_app: AppHandle) -> Result<String, String> {
+pub fn get_hook_config_snippet(_app: AppHandle) -> Result<Value, String> {
     let hook_path = get_hook_binary_path()?;
 
     // Claude Code 配置片段
@@ -498,32 +498,39 @@ pub fn get_hook_config_snippet(_app: AppHandle) -> Result<String, String> {
     let claude_snippet = serde_json::json!({
         "hooks": claude_hooks
     });
-
-    // Codex 配置片段
-    let mut codex_hooks = serde_json::Map::new();
-    for event in CODEX_HOOK_EVENTS {
-        let entry = build_codex_hook_entry(&hook_path, event);
-        codex_hooks.insert(event.to_string(), entry);
-    }
-    let codex_snippet = serde_json::json!({
-        "hooks": codex_hooks
-    });
-
     let claude_str = serde_json::to_string_pretty(&claude_snippet)
         .map_err(|e| e.to_string())?;
-    let codex_str = serde_json::to_string_pretty(&codex_snippet)
+
+    // Codex 配置片段 — 镜像 register_codex_hooks 的写入逻辑
+    let mut codex_config: Value = serde_json::json!({});
+    codex_config["hooks"] = serde_json::json!({});
+    if let Some(hooks) = codex_config["hooks"].as_object_mut() {
+        for event in CODEX_HOOK_EVENTS {
+            hooks.insert(event.to_string(), build_codex_hook_entry(&hook_path, event));
+        }
+    }
+    let codex_str = serde_json::to_string_pretty(&codex_config)
         .map_err(|e| e.to_string())?;
 
-    Ok(format!(
-        "=== Claude Code (~/.claude/settings.json) ===\n\
-         {}\n\n\
-         === Codex (~/.codex/hooks.json) ===\n\
-         {}\n\n\
-         === Codex (~/.codex/config.toml) ===\n\
-         [features]\n\
-         codex_hooks = true",
-        claude_str, codex_str
-    ))
+    Ok(serde_json::json!({
+        "claude": {
+            "file": "~/.claude/settings.json",
+            "content": claude_str
+        },
+        "codex": {
+            "files": [
+                {
+                    "file": "~/.codex/hooks.json",
+                    "content": codex_str
+                },
+                {
+                    "file": "~/.codex/config.toml",
+                    "note": "追加以下内容",
+                    "content": "[features]\ncodex_hooks = true"
+                }
+            ]
+        }
+    }))
 }
 
 /// 获取当前 hook 状态信息

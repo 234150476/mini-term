@@ -835,8 +835,12 @@ function AiHookSettings() {
   const [unregistering, setUnregistering] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [resultMsg, setResultMsg] = useState('');
-  const [snippet, setSnippet] = useState('');
+  const [snippetData, setSnippetData] = useState<{
+    claude: { file: string; content: string };
+    codex: { files: { file: string; content: string; note?: string }[] };
+  } | null>(null);
   const [showSnippet, setShowSnippet] = useState(false);
+  const [snippetTab, setSnippetTab] = useState<'claude' | 'codex'>('claude');
 
   const refreshHookStatus = useCallback(() => {
     invoke<{ port: number; running: boolean }>('get_hook_status').then(setHookStatus);
@@ -893,11 +897,11 @@ function AiHookSettings() {
       return;
     }
     try {
-      const s = await invoke<string>('get_hook_config_snippet');
-      setSnippet(s);
+      const data = await invoke<typeof snippetData>('get_hook_config_snippet');
+      setSnippetData(data);
       setShowSnippet(true);
     } catch (e: unknown) {
-      setSnippet(e instanceof Error ? e.message : String(e));
+      setSnippetData(null);
       setShowSnippet(true);
     }
   }, [showSnippet]);
@@ -976,9 +980,40 @@ function AiHookSettings() {
           {showSnippet ? '收起配置片段' : '查看配置片段（手动粘贴）'}
         </button>
 
-        {showSnippet && snippet && (
-          <div className="px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-base)] border border-[var(--border-default)] text-xs font-mono text-[var(--text-muted)] whitespace-pre-wrap max-h-64 overflow-y-auto select-all">
-            {snippet}
+        {showSnippet && snippetData && (
+          <div className="rounded-[var(--radius-sm)] bg-[var(--bg-base)] border border-[var(--border-default)] overflow-hidden">
+            <div className="flex border-b border-[var(--border-subtle)]">
+              {(['claude', 'codex'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  className={`flex-1 py-1.5 text-sm transition-colors ${
+                    snippetTab === tab
+                      ? 'text-[var(--accent)] border-b-2 border-[var(--accent)]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                  }`}
+                  onClick={() => setSnippetTab(tab)}
+                >
+                  {tab === 'claude' ? 'Claude Code' : 'Codex'}
+                </button>
+              ))}
+            </div>
+            <div className="px-3 py-2 text-xs font-mono text-[var(--text-muted)] whitespace-pre-wrap max-h-64 overflow-y-auto select-all">
+              {snippetTab === 'claude' ? (
+                <>
+                  <div className="text-[var(--text-secondary)] mb-1">{snippetData.claude.file}</div>
+                  {snippetData.claude.content}
+                </>
+              ) : (
+                snippetData.codex.files.map((f, i) => (
+                  <div key={f.file} className={i > 0 ? 'mt-3 pt-3 border-t border-[var(--border-subtle)]' : ''}>
+                    <div className="text-[var(--text-secondary)] mb-1">
+                      {f.file}{f.note ? ` (${f.note})` : ''}
+                    </div>
+                    {f.content}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
 
