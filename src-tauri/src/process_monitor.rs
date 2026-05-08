@@ -27,11 +27,18 @@ pub fn start_monitor(
             let pty_ids = pty_manager.get_pty_ids();
 
             for pty_id in &pty_ids {
-                // Hook 优先：该 PTY 启用了 hook 时完全信任 hook 状态，不做轮询
+                // Hook 优先，但 ai-idle 时校验 AI 进程是否仍在运行
                 let status = if hook_state.is_hook_enabled(*pty_id) {
-                    hook_state
+                    let hook_status = hook_state
                         .get_status(*pty_id)
-                        .unwrap_or_else(|| "idle".to_string())
+                        .unwrap_or_else(|| "idle".to_string());
+                    if hook_status == "ai-idle" && !pty_manager.is_ai_session(*pty_id) {
+                        // AI 已通过输入检测退出（/exit、Ctrl+D 等），清除 hook 状态
+                        hook_state.remove(*pty_id);
+                        "idle".to_string()
+                    } else {
+                        hook_status
+                    }
                 } else if pty_manager.is_ai_session(*pty_id) {
                     // 未启用 hook 时降级到进程轮询逻辑
                     if pty_manager.has_recent_output(*pty_id, AI_ACTIVE_TIMEOUT) {

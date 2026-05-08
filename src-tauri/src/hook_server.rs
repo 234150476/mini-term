@@ -106,15 +106,16 @@ impl HookState {
 /// 将 hook 事件名映射为 PTY 状态
 ///
 /// - ai-working: 表示 AI 正在处理（思考/工具调用/子代理/压缩）
-/// - ai-idle: 表示 AI 等待用户输入（会话开始/结束/停止/权限请求/通知等）
+/// - ai-idle: 表示 AI 等待用户输入（停止/权限请求/通知等）
+/// - SessionEnd 单独处理（清除 hook 状态），不在此映射
 fn map_event_to_status(event: &str) -> Option<&'static str> {
     match event {
         // ai-working 状态：AI 正在积极工作
         "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "SubagentStart" | "PreCompact"
         | "PostCompact" => Some("ai-working"),
-        // ai-idle 状态：AI 等待用户输入或已完成
-        "SessionStart" | "SessionEnd" | "Stop" | "PermissionRequest" | "Notification"
-        | "Elicitation" | "SubagentStop" => Some("ai-idle"),
+        // ai-idle 状态：AI 等待用户输入
+        "SessionStart" | "Stop" | "PermissionRequest" | "Notification" | "Elicitation"
+        | "SubagentStop" => Some("ai-idle"),
         _ => None,
     }
 }
@@ -201,7 +202,21 @@ pub fn start_hook_server(app: AppHandle, hook_state: HookState) {
 
             // 处理事件
             if let (Some(pty_id), Some(ref event)) = (payload.pty_id, &payload.event) {
-                if let Some(status) = map_event_to_status(event) {
+                if event == "SessionEnd" {
+                    // 会话结束：清除 hook 状态，让 process_monitor 回退到轮询
+                    hook_state.remove(pty_id);
+                    let _ = app.emit(
+                        "pty-status-change",
+                        PtyStatusChangePayload {
+                            pty_id,
+                            status: "idle".to_string(),
+                        },
+                    );
+                    eprintln!(
+                        "[hook-server] pty_id={} event=SessionEnd -> hook 已清除，回退到 idle",
+                        pty_id
+                    );
+                } else if let Some(status) = map_event_to_status(event) {
                     hook_state.update(pty_id, status.to_string());
 
                     // 通过 Tauri event 通知前端（复用现有 pty-status-change 事件）
