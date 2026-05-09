@@ -282,7 +282,10 @@ fn load_codex_thread_names(codex_dir: &Path) -> HashMap<String, String> {
 fn sort_newest_session_paths(paths: &mut Vec<PathBuf>, limit: usize) {
     paths.sort_by(|a, b| {
         let mt = |p: &PathBuf| p.metadata().and_then(|m| m.modified()).ok();
-        mt(b).cmp(&mt(a))
+        match (mt(a), mt(b)) {
+            (Some(ta), Some(tb)) => tb.cmp(&ta),
+            _ => b.cmp(a),
+        }
     });
     if paths.len() > limit {
         paths.truncate(limit);

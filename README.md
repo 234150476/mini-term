@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.4.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.4.2-blue" alt="version">
   <img src="https://img.shields.io/badge/platform-Windows-0078D4" alt="platform">
   <img src="https://img.shields.io/badge/macOS%20%7C%20Linux-experimental-lightgrey" alt="platform-experimental">
   <img src="https://img.shields.io/badge/Tauri-v2-orange" alt="tauri">
@@ -47,7 +47,7 @@ Mini-Term 用一个轻量桌面应用解决以上所有问题。
 - **复制粘贴** — `Ctrl+Shift+C/V`（macOS `⌘+Shift+C/V`）快捷键 + 右键菜单，未选中时"复制"自动置灰；Windows 大段多行粘贴自动分块写入，防止 ConPTY 丢行
 - **长文本粘贴** — 剪贴板文本 ≥10 行或 ≥2000 字符时自动转存为临时 `.txt` 并粘贴带引号的文件路径，避免 AI 工具直接处理超长内容引发性能与 paste bracket 问题
 - **图片粘贴** — 剪贴板含截图时自动检测，通过 Win32 API 保存为临时 PNG 并粘贴带引号的路径，兼容 PinPix 等非标准格式
-- **文件拖拽** — 文件拖到终端自动插入带引号的绝对路径，兼容含空格的路径
+- **文件拖拽** — 文件树或系统资源管理器拖文件到终端自动插入带引号的绝对路径，精准定位目标分屏 pane，兼容含空格的路径
 - **多 Shell 配置** — Windows（cmd / powershell / pwsh）、macOS（zsh / bash）、Linux（bash / sh）等，可自由增删
 
 ### 文件搜索
@@ -202,6 +202,7 @@ mini-term/
 │   ├── hooks/
 │   │   ├── useTauriEvent.ts      # Tauri 事件订阅封装
 │   │   ├── useAiSubmitMarker.ts  # AI 会话 Enter 打点
+│   │   ├── useExternalFileDrop.ts # 系统资源管理器拖拽文件到终端
 │   │   └── useMarkerHotkeys.ts   # 标记间跳转快捷键
 │   └── utils/
 │       ├── contextMenu.ts        # 右键菜单 DOM 实现
