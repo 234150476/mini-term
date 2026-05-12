@@ -17,11 +17,16 @@ function isMarkdownFile(path: string) {
   return /\.(md|markdown|mkd|mdx)$/i.test(path);
 }
 
+function isImageFile(path: string) {
+  return /\.(png|jpe?g|gif|bmp|webp|svg|ico|avif|tiff?)$/i.test(path);
+}
+
 export function FileViewerModal({ open, onClose, filePath, projectRoot, highlightLine }: FileViewerModalProps) {
   const [result, setResult] = useState<FileContentResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const isMd = useMemo(() => isMarkdownFile(filePath), [filePath]);
+  const isImg = useMemo(() => isImageFile(filePath), [filePath]);
   const [preview, setPreview] = useState(true);
   const highlightRef = useRef<HTMLDivElement>(null);
 
@@ -33,7 +38,7 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
   }, [filePath]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isImg) return;
     setLoading(true);
     setError('');
     setResult(null);
@@ -42,7 +47,7 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
       .then(setResult)
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [open, filePath, projectRoot]);
+  }, [open, filePath, projectRoot, isImg]);
 
   useEffect(() => {
     if (!open) return;
@@ -117,7 +122,17 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
               {error}
             </div>
           )}
-          {result && result.isBinary && (
+          {isImg && (
+            <div className="flex items-center justify-center h-full p-6">
+              <img
+                src={convertFileSrc(filePath)}
+                alt={fileName}
+                className="max-w-full max-h-full object-contain"
+                draggable={false}
+              />
+            </div>
+          )}
+          {!isImg && result && result.isBinary && (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-[var(--text-muted)]">
               <span>二进制文件，不支持预览</span>
               <button
@@ -128,7 +143,7 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
               </button>
             </div>
           )}
-          {result && result.tooLarge && (
+          {!isImg && result && result.tooLarge && (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-[var(--text-muted)]">
               <span>文件过大（&gt;1MB），不支持预览</span>
               <button
@@ -139,7 +154,7 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
               </button>
             </div>
           )}
-          {result && !result.isBinary && !result.tooLarge && isMd && preview ? (
+          {!isImg && result && !result.isBinary && !result.tooLarge && isMd && preview ? (
             <div className="md-preview p-6 max-w-[860px] mx-auto">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -153,7 +168,7 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
                 {result.content}
               </ReactMarkdown>
             </div>
-          ) : result && !result.isBinary && !result.tooLarge && (
+          ) : !isImg && result && !result.isBinary && !result.tooLarge && (
             <div className="font-mono text-sm leading-6">
               {result.content.split('\n').map((line, i) => (
                 <div
