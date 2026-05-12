@@ -1,11 +1,52 @@
 use ignore::gitignore::Gitignore;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event as NotifyEvent};
 use serde::Serialize;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
+
+fn natural_cmp(a: &str, b: &str) -> Ordering {
+    let a = a.to_lowercase();
+    let b = b.to_lowercase();
+    let mut ai = a.as_bytes().iter().peekable();
+    let mut bi = b.as_bytes().iter().peekable();
+
+    loop {
+        match (ai.peek(), bi.peek()) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(&&ac), Some(&&bc)) => {
+                if ac.is_ascii_digit() && bc.is_ascii_digit() {
+                    let mut an: u64 = 0;
+                    while let Some(&&d) = ai.peek() {
+                        if !d.is_ascii_digit() { break; }
+                        an = an * 10 + (d - b'0') as u64;
+                        ai.next();
+                    }
+                    let mut bn: u64 = 0;
+                    while let Some(&&d) = bi.peek() {
+                        if !d.is_ascii_digit() { break; }
+                        bn = bn * 10 + (d - b'0') as u64;
+                        bi.next();
+                    }
+                    match an.cmp(&bn) {
+                        Ordering::Equal => continue,
+                        ord => return ord,
+                    }
+                } else {
+                    match ac.cmp(&bc) {
+                        Ordering::Equal => { ai.next(); bi.next(); }
+                        ord => return ord,
+                    }
+                }
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -174,7 +215,7 @@ pub fn list_directory(project_root: String, path: String) -> Result<Vec<FileEntr
     entries.sort_by(|a, b| {
         b.is_dir.cmp(&a.is_dir)
             .then_with(|| a.ignored.cmp(&b.ignored))
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+            .then_with(|| natural_cmp(&a.name, &b.name))
     });
     Ok(entries)
 }
