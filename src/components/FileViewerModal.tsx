@@ -21,14 +21,35 @@ function isImageFile(path: string) {
   return /\.(png|jpe?g|gif|bmp|webp|svg|ico|avif|tiff?)$/i.test(path);
 }
 
+function isHtmlFile(path: string) {
+  return /\.html?$/i.test(path);
+}
+
 export function FileViewerModal({ open, onClose, filePath, projectRoot, highlightLine }: FileViewerModalProps) {
   const [result, setResult] = useState<FileContentResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const isMd = useMemo(() => isMarkdownFile(filePath), [filePath]);
   const isImg = useMemo(() => isImageFile(filePath), [filePath]);
+  const isHtml = useMemo(() => isHtmlFile(filePath), [filePath]);
   const [preview, setPreview] = useState(true);
   const highlightRef = useRef<HTMLDivElement>(null);
+
+  const htmlSrcDoc = useMemo(() => {
+    if (!isHtml || !result?.content) return '';
+    const normalized = filePath.replace(/\\/g, '/');
+    const fileDir = normalized.substring(0, normalized.lastIndexOf('/'));
+    const baseUrl = convertFileSrc(fileDir) + '/';
+    const baseTag = `<base href="${baseUrl}">`;
+    const content = result.content;
+    if (/<head[^>]*>/i.test(content)) {
+      return content.replace(/(<head[^>]*>)/i, `$1${baseTag}`);
+    }
+    if (/<html[^>]*>/i.test(content)) {
+      return content.replace(/(<html[^>]*>)/i, `$1<head>${baseTag}</head>`);
+    }
+    return baseTag + content;
+  }, [isHtml, result?.content, filePath]);
 
   const resolveImgSrc = useCallback((src: string | undefined) => {
     if (!src || /^(https?:|data:|blob:)/i.test(src)) return src;
@@ -85,7 +106,7 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {isMd && result && !result.isBinary && !result.tooLarge && (
+            {(isMd || isHtml) && result && !result.isBinary && !result.tooLarge && (
               <div className="flex rounded-[var(--radius-sm)] border border-[var(--border-default)] overflow-hidden text-xs">
                 <button
                   className={`px-2.5 py-1 transition-colors ${preview ? 'bg-[var(--accent)] text-[var(--bg-base)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
@@ -154,7 +175,14 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
               </button>
             </div>
           )}
-          {!isImg && result && !result.isBinary && !result.tooLarge && isMd && preview ? (
+          {!isImg && result && !result.isBinary && !result.tooLarge && isHtml && preview ? (
+            <iframe
+              srcDoc={htmlSrcDoc}
+              title={fileName}
+              className="w-full h-full border-0 bg-white"
+              sandbox="allow-same-origin"
+            />
+          ) : !isImg && result && !result.isBinary && !result.tooLarge && isMd && preview ? (
             <div className="md-preview p-6 max-w-[860px] mx-auto">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
