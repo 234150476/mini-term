@@ -39,16 +39,10 @@ export function FileViewerModal({ open, onClose, filePath, projectRoot, highligh
     if (!isHtml || !result?.content) return '';
     const normalized = filePath.replace(/\\/g, '/');
     const fileDir = normalized.substring(0, normalized.lastIndexOf('/'));
-    const baseUrl = convertFileSrc(fileDir) + '/';
-    const baseTag = `<base href="${baseUrl}">`;
-    const content = result.content;
-    if (/<head[^>]*>/i.test(content)) {
-      return content.replace(/(<head[^>]*>)/i, `$1${baseTag}`);
-    }
-    if (/<html[^>]*>/i.test(content)) {
-      return content.replace(/(<html[^>]*>)/i, `$1<head>${baseTag}</head>`);
-    }
-    return baseTag + content;
+    return result.content.replace(
+      /((?:src|href|poster)\s*=\s*["'])(?!https?:|data:|blob:|mailto:|tel:|#|javascript:)([^"']+)(["'])/gi,
+      (_match, prefix, url, suffix) => prefix + convertFileSrc(fileDir + '/' + url) + suffix
+    );
   }, [isHtml, result?.content, filePath]);
 
   const resolveImgSrc = useCallback((src: string | undefined) => {
