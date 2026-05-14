@@ -124,11 +124,12 @@ impl HookState {
 fn map_event_to_status(event: &str) -> Option<&'static str> {
     match event {
         // ai-working 状态：AI 正在积极工作
-        "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "SubagentStart" | "PreCompact"
-        | "PostCompact" => Some("ai-working"),
+        "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "SubagentStart" | "SubagentStop"
+        | "PreCompact" | "PostCompact" => Some("ai-working"),
         // ai-idle 状态：AI 等待用户输入
-        "SessionStart" | "Stop" | "PermissionRequest" | "Notification" | "Elicitation"
-        | "SubagentStop" => Some("ai-idle"),
+        "SessionStart" | "Stop" | "PermissionRequest" | "Notification" | "Elicitation" => {
+            Some("ai-idle")
+        }
         _ => None,
     }
 }
