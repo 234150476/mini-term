@@ -38,6 +38,7 @@ export interface AppConfig {
   sessionsVisible: boolean;
   filesVisible: boolean;
   gitVisible: boolean;
+  companionMode?: boolean;
   lastActiveProjectId?: string;
   hookEnabled: boolean;
 }

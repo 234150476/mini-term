@@ -10,6 +10,7 @@ import { DoneTag } from './DoneTag';
 import { SessionList } from './SessionList';
 import { showContextMenu } from '../utils/contextMenu';
 import { showPrompt } from '../utils/prompt';
+import { activateProjectTerminal } from '../utils/externalTerminal';
 import { initProjectDrag, isProjectDragging, getProjectDragPayload, onProjectDragEnd } from '../utils/projectDragState';
 import {
   getOrderedTree,
@@ -63,6 +64,7 @@ export function ProjectList() {
 
   const orderedItems = getOrderedTree(config);
   const allGroups = collectAllGroups(config.projectTree ?? []);
+  const companionMode = config.companionMode ?? false;
 
   // === 系统文件拖放（从资源管理器拖入文件夹添加项目） ===
   useEffect(() => {
@@ -342,6 +344,13 @@ export function ProjectList() {
     const projectPs = projectStates.get(project.id);
     const showDoneTag = !!projectPs?.needsAttention && !isActive;
 
+    const handleActivate = () => {
+      setActiveProject(project.id);
+      if (companionMode) {
+        void activateProjectTerminal(project.id, project.path, project.name).catch(() => {});
+      }
+    };
+
     return (
       <div
         key={project.id}
@@ -355,7 +364,7 @@ export function ProjectList() {
         onMouseMove={(e) => handleMouseMoveOver(e, project.id, false)}
         onMouseLeave={handleMouseLeaveTarget}
         onMouseUp={(e) => handleMouseUpDrop(e, project.id)}
-        onClick={() => setActiveProject(project.id)}
+        onClick={handleActivate}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();

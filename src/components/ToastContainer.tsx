@@ -1,9 +1,11 @@
 import { useAppStore } from '../store';
+import { activateProjectTerminal } from '../utils/externalTerminal';
 
 export function ToastContainer() {
   const notifications = useAppStore((s) => s.notifications);
   const dismissNotification = useAppStore((s) => s.dismissNotification);
   const setActiveProject = useAppStore((s) => s.setActiveProject);
+  const config = useAppStore((s) => s.config);
 
   // 最多同时渲染 5 个，超出排队
   const visible = notifications.slice(0, 5);
@@ -18,6 +20,12 @@ export function ToastContainer() {
           className="toast-card"
           onClick={() => {
             setActiveProject(n.projectId);
+            if (config.companionMode) {
+              const project = config.projects.find((p) => p.id === n.projectId);
+              if (project) {
+                void activateProjectTerminal(project.id, project.path, project.name).catch(() => {});
+              }
+            }
             dismissNotification(n.id);
           }}
         >

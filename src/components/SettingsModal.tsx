@@ -529,6 +529,7 @@ function FontSizeSlider({
 function SystemSettings() {
   const config = useAppStore((s) => s.config);
   const setConfig = useAppStore((s) => s.setConfig);
+  const companionMode = config.companionMode ?? false;
 
   const [editors, setEditors] = useState<EditorConfig[]>([]);
   const [defaultEditorName, setDefaultEditorName] = useState('');
@@ -653,8 +654,43 @@ function SystemSettings() {
     invoke('save_config', { config: newConfig });
   }, [setConfig]);
 
+  const handleCompanionModeToggle = useCallback((enabled: boolean) => {
+    const currentConfig = useAppStore.getState().config;
+    const newConfig = {
+      ...currentConfig,
+      companionMode: enabled,
+    };
+    setConfig(newConfig);
+    invoke('save_config', { config: newConfig });
+  }, [setConfig]);
+
   return (
     <div className="space-y-6">
+      <div className="text-base text-[var(--text-muted)] uppercase tracking-[0.1em] mb-2">
+        挂件模式
+      </div>
+
+      <div className="flex items-center justify-between px-3 py-2.5 rounded-[var(--radius-md)] bg-[var(--bg-base)] border border-[var(--border-subtle)] mb-6">
+        <div className="pr-4">
+          <div className="text-base text-[var(--text-primary)]">启用 WT 挂件模式</div>
+          <div className="text-sm text-[var(--text-muted)]">
+            仅保留左侧 Projects 和 Sessions，项目点击时切换或打开对应的 Windows Terminal
+          </div>
+        </div>
+        <button
+          className={`relative w-9 h-5 rounded-full transition-colors ${
+            companionMode ? 'bg-[var(--accent)]' : 'bg-[var(--border-strong)]'
+          }`}
+          onClick={() => handleCompanionModeToggle(!companionMode)}
+        >
+          <span
+            className={`absolute top-0.5 left-0 w-4 h-4 rounded-full bg-white transition-transform ${
+              companionMode ? 'translate-x-[18px]' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </div>
+
       {/* 主题模式 */}
       <div className="text-base text-[var(--text-muted)] uppercase tracking-[0.1em] mb-2">
         主题

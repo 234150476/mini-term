@@ -2,6 +2,7 @@ mod ai_sessions;
 mod clipboard;
 mod config;
 mod editor;
+mod external_terminal;
 mod fs;
 mod git;
 mod hook_registry;
@@ -28,6 +29,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
+        .manage(external_terminal::ExternalTerminalState::new())
         .manage(pty::PtyManager::new())
         .manage(fs::FsWatcherManager::new())
         .manage(search::SearchManager::new())
@@ -54,6 +56,9 @@ pub fn run() {
             let pty_manager = app.state::<crate::pty::PtyManager>();
             let pty_clone = pty_manager.inner().clone();
             process_monitor::start_monitor(app.handle().clone(), pty_clone, hook_state);
+
+            let external_state = app.state::<crate::external_terminal::ExternalTerminalState>();
+            external_terminal::start_dock_monitor(app.handle().clone(), external_state.inner().clone());
             Ok(())
         })
         .on_window_event(|_window, event| {
@@ -118,6 +123,11 @@ pub fn run() {
             hook_registry::get_hook_config_snippet,
             hook_registry::get_hook_status,
             hook_server::toggle_hook_server,
+            external_terminal::activate_project_terminal,
+            external_terminal::get_companion_window_rect,
+            external_terminal::try_snap_companion_dock,
+            external_terminal::handle_docked_app_moved,
+            external_terminal::clear_companion_dock,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

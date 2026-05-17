@@ -365,6 +365,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     sessionsVisible: true,
     filesVisible: true,
     gitVisible: true,
+    companionMode: false,
     hookEnabled: false,
   },
   setConfig: (config) => set({ config }),

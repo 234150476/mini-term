@@ -30,12 +30,15 @@ export function App() {
   const [currentVersion, setCurrentVersion] = useState('');
   const [updateInfo, setUpdateInfo] = useState<ReleaseInfo | null>(null);
   const [mountedProjectIds, setMountedProjectIds] = useState<string[]>([]);
+  const dockMoveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dockMoveHandlingRef = useRef(false);
   const activeProjectId = useAppStore((s) => s.activeProjectId);
   const config = useAppStore((s) => s.config);
   const setConfig = useAppStore((s) => s.setConfig);
   const updatePaneStatusByPty = useAppStore((s) => s.updatePaneStatusByPty);
   const searchModalOpen = useAppStore((s) => s.searchModalOpen);
   const setSearchModalOpen = useAppStore((s) => s.setSearchModalOpen);
+  const companionMode = config.companionMode ?? false;
 
   useEffect(() => {
     invoke<AppConfig>('load_config').then((cfg) => {
@@ -86,6 +89,45 @@ export function App() {
       showWindow();
     });
   }, []);
+
+  useEffect(() => {
+    if (!companionMode) return;
+    const appWindow = getCurrentWindow();
+
+    const scheduleDockCheck = () => {
+      if (dockMoveTimerRef.current) {
+        clearTimeout(dockMoveTimerRef.current);
+      }
+      dockMoveTimerRef.current = setTimeout(() => {
+        if (dockMoveHandlingRef.current) return;
+        dockMoveHandlingRef.current = true;
+        void invoke<boolean>('handle_docked_app_moved')
+          .then((handled) => {
+            if (!handled) {
+              return invoke<boolean>('try_snap_companion_dock', { threshold: 48, gap: 8 });
+            }
+            return handled;
+          })
+          .catch(() => {})
+          .finally(() => {
+            dockMoveHandlingRef.current = false;
+          });
+      }, 220);
+    };
+
+    const unlistenMovedPromise = appWindow.onMoved(scheduleDockCheck);
+    const unlistenResizedPromise = appWindow.onResized(scheduleDockCheck);
+
+    return () => {
+      if (dockMoveTimerRef.current) {
+        clearTimeout(dockMoveTimerRef.current);
+        dockMoveTimerRef.current = null;
+      }
+      void unlistenMovedPromise.then((fn) => fn());
+      void unlistenResizedPromise.then((fn) => fn());
+      void invoke('clear_companion_dock').catch(() => {});
+    };
+  }, [companionMode]);
 
   // 阻止浏览器默认的文件拖放行为（防止导航到拖入的文件）
   useEffect(() => {
@@ -256,58 +298,91 @@ export function App() {
         {configLoaded && <ActivityBar />}
 
         {/* 主内容区域 — Allotment 可拖拽 */}
-        {configLoaded ? <Allotment
-          defaultSizes={config.layoutSizes ?? [200, 280, 1000]}
-          onChange={saveLayoutSizes}
-        >
-          {/* 左栏：Projects + Sessions */}
-          <Allotment.Pane minSize={140} maxSize={350} visible={leftColumnVisible}>
-            <ProjectList />
-          </Allotment.Pane>
-
-          {/* 中栏：FileTree + Git */}
-          <Allotment.Pane minSize={100} visible={middleColumnVisible}>
+        {configLoaded ? (
+          companionMode ? (
+            middleColumnVisible ? (
+              <Allotment
+                defaultSizes={config.layoutSizes ?? [200, 280]}
+                onChange={saveLayoutSizes}
+              >
+                <Allotment.Pane minSize={140} maxSize={350} visible={leftColumnVisible}>
+                  <ProjectList />
+                </Allotment.Pane>
+                <Allotment.Pane minSize={100} visible={middleColumnVisible}>
+                  <Allotment
+                    vertical
+                    defaultSizes={config.middleColumnSizes ?? [300, 200]}
+                    onChange={saveMiddleColumnSizes}
+                  >
+                    <Allotment.Pane minSize={150} visible={config.filesVisible}>
+                      <FileTree />
+                    </Allotment.Pane>
+                    <Allotment.Pane minSize={36} visible={config.gitVisible}>
+                      <GitHistory />
+                    </Allotment.Pane>
+                  </Allotment>
+                </Allotment.Pane>
+              </Allotment>
+            ) : (
+              <div className="flex-1 min-w-0">
+                <ProjectList />
+              </div>
+            )
+          ) : (
             <Allotment
-              vertical
-              defaultSizes={config.middleColumnSizes ?? [300, 200]}
-              onChange={saveMiddleColumnSizes}
+              defaultSizes={config.layoutSizes ?? [200, 280, 1000]}
+              onChange={saveLayoutSizes}
             >
-              <Allotment.Pane minSize={150} visible={config.filesVisible}>
-                <FileTree />
+              {/* 左栏：Projects + Sessions */}
+              <Allotment.Pane minSize={140} maxSize={350} visible={leftColumnVisible}>
+                <ProjectList />
               </Allotment.Pane>
-              <Allotment.Pane minSize={36} visible={config.gitVisible}>
-                <GitHistory />
+
+              {/* 中栏：FileTree + Git */}
+              <Allotment.Pane minSize={100} visible={middleColumnVisible}>
+                <Allotment
+                  vertical
+                  defaultSizes={config.middleColumnSizes ?? [300, 200]}
+                  onChange={saveMiddleColumnSizes}
+                >
+                  <Allotment.Pane minSize={150} visible={config.filesVisible}>
+                    <FileTree />
+                  </Allotment.Pane>
+                  <Allotment.Pane minSize={36} visible={config.gitVisible}>
+                    <GitHistory />
+                  </Allotment.Pane>
+                </Allotment>
+              </Allotment.Pane>
+
+              {/* 右栏：Terminal */}
+              <Allotment.Pane>
+                <div className="relative h-full">
+                  {terminalProjectIds.map((projectId) => {
+                    const project = config.projects.find((p) => p.id === projectId);
+                    if (!project) return null;
+                    return (
+                      <div
+                        key={project.id}
+                        className="absolute inset-0"
+                        style={{ display: project.id === activeProjectId ? 'block' : 'none' }}
+                      >
+                        <TerminalArea
+                          projectId={project.id}
+                          projectPath={project.path}
+                        />
+                      </div>
+                    );
+                  })}
+                  {config.projects.length === 0 && (
+                    <div className="h-full bg-[var(--bg-terminal)] flex items-center justify-center text-[var(--text-muted)] text-sm">
+                      请先在左栏添加项目
+                    </div>
+                  )}
+                </div>
               </Allotment.Pane>
             </Allotment>
-          </Allotment.Pane>
-
-          {/* 右栏：Terminal */}
-          <Allotment.Pane>
-            <div className="relative h-full">
-              {terminalProjectIds.map((projectId) => {
-                const project = config.projects.find((p) => p.id === projectId);
-                if (!project) return null;
-                return (
-                  <div
-                    key={project.id}
-                    className="absolute inset-0"
-                    style={{ display: project.id === activeProjectId ? 'block' : 'none' }}
-                  >
-                    <TerminalArea
-                      projectId={project.id}
-                      projectPath={project.path}
-                    />
-                  </div>
-                );
-              })}
-              {config.projects.length === 0 && (
-                <div className="h-full bg-[var(--bg-terminal)] flex items-center justify-center text-[var(--text-muted)] text-sm">
-                  请先在左栏添加项目
-                </div>
-              )}
-            </div>
-          </Allotment.Pane>
-        </Allotment> : null}
+          )
+        ) : null}
       </div>
       <SettingsModal open={configOpen} onClose={() => setConfigOpen(false)} />
       <SearchModal open={searchModalOpen} onClose={() => setSearchModalOpen(false)} />

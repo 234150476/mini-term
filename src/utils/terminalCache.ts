@@ -215,6 +215,11 @@ export function getOrCreateTerminal(ptyId: number): CachedTerminal {
     cursorStyle: 'bar',
     cursorWidth: 2,
     scrollback: 100000,
+    // 让 ED2 / CSI 2J 清屏把当前 viewport 推入 scrollback。
+    // Codex 在 no-alt-screen / inline 模式下仍会频繁整屏清空并重绘，
+    // xterm.js 默认会直接擦掉当前可视区，导致看起来只能往上翻几条。
+    // 打开该选项后，行为更接近原生终端：清屏前的内容还能通过滚轮回看。
+    scrollOnEraseInDisplay: true,
     letterSpacing: 0,
     lineHeight: 1.35,
     theme,
