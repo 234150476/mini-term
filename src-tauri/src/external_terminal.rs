@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -50,6 +50,39 @@ const WT_WINDOW_NAME: &str = "mini-term-companion";
 const MIN_SIDEBAR_WIDTH: i32 = 220;
 const MIN_WT_WIDTH: i32 = 480;
 
+/// Strip dynamic prefixes that Claude/Codex add to tab titles while running.
+/// Examples: "✻ my-project" → "my-project", "⠋ my-project" → "my-project"
+/// Strips leading non-ASCII characters and any trailing whitespace after them.
+fn strip_dynamic_prefix(title: &str) -> &str {
+    let s = title.trim_start();
+    // Find the first ASCII alphanumeric or common path char (the real title start)
+    let start = s
+        .char_indices()
+        .find(|(_, c)| c.is_ascii_alphanumeric() || *c == '.' || *c == '_' || *c == '-' || *c == '/' || *c == '\\' || *c == '~')
+        .map(|(i, _)| i)
+        .unwrap_or(0);
+    &s[start..]
+}
+
+/// Check if a tab title matches a preferred title, ignoring dynamic prefixes/suffixes.
+/// Handles: "✻ my-project", "my-project ⠋", "⠋ my-project [working]", etc.
+fn title_matches(actual_title: &str, preferred: &str) -> bool {
+    if actual_title == preferred {
+        return true;
+    }
+    let stripped = strip_dynamic_prefix(actual_title);
+    if stripped == preferred {
+        return true;
+    }
+    // Handle suffix: stripped starts with preferred, followed by nothing or non-alnum
+    if stripped.len() > preferred.len() && stripped.starts_with(preferred) {
+        let after = &stripped[preferred.len()..];
+        let next_char = after.chars().next().unwrap();
+        return !next_char.is_ascii_alphanumeric() && next_char != '(' && next_char != ')';
+    }
+    false
+}
+
 fn now_ms() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -80,7 +113,7 @@ fn main_window_info(app: &tauri::AppHandle) -> Result<(usize, WindowGeometry), S
 
 #[cfg(target_os = "windows")]
 mod win {
-    use crate::external_terminal::{WindowGeometry, WindowRect, WT_WINDOW_NAME};
+    use crate::external_terminal::{WindowGeometry, WindowRect, WT_WINDOW_NAME, title_matches};
     use windows::core::BSTR;
     use windows::Win32::Foundation::{HWND, RECT};
     use windows::Win32::Graphics::Dwm::{
@@ -242,7 +275,7 @@ mod win {
                 let score = info
                     .titles
                     .iter()
-                    .filter(|title| preferred_titles.iter().any(|preferred| preferred == *title))
+                    .filter(|title| preferred_titles.iter().any(|preferred| title_matches(title, preferred)))
                     .count();
                 if score > best_score {
                     best_score = score;
@@ -283,7 +316,7 @@ mod win {
                 let score = info
                     .titles
                     .iter()
-                    .filter(|title| preferred_titles.iter().any(|preferred| preferred == *title))
+                    .filter(|title| preferred_titles.iter().any(|preferred| title_matches(title, preferred)))
                     .count();
                 if score > best_score {
                     best_score = score;
@@ -326,7 +359,7 @@ mod win {
                 let score = info
                     .titles
                     .iter()
-                    .filter(|title| preferred_titles.iter().any(|preferred| preferred == *title))
+                    .filter(|title| preferred_titles.iter().any(|preferred| title_matches(title, preferred)))
                     .count();
                 if score > best_score {
                     best_score = score;
@@ -448,15 +481,19 @@ fn choose_title(base_name: &str, project_id: &str, titles_by_project: &HashMap<S
         return existing.clone();
     }
 
-    let used: HashSet<String> = open_titles.iter().cloned().collect();
-    if !used.contains(base_name) {
+    // Check with fuzzy matching (strip dynamic prefixes from open titles)
+    let title_in_use = |name: &str| -> bool {
+        open_titles.iter().any(|t| title_matches(t, name))
+    };
+
+    if !title_in_use(base_name) {
         return base_name.to_string();
     }
 
     let mut idx = 1usize;
     loop {
         let candidate = format!("{base_name}({idx})");
-        if !used.contains(&candidate) {
+        if !title_in_use(&candidate) {
             return candidate;
         }
         idx += 1;
@@ -490,7 +527,7 @@ pub fn activate_project_terminal(
     }
 
     if let Some(existing_title) = titles_by_project.get(&project_id).cloned() {
-        if let Some(tab_index) = open_titles.iter().position(|title| title == &existing_title) {
+        if let Some(tab_index) = open_titles.iter().position(|title| title_matches(title, &existing_title)) {
             if focus_tab_by_index(tab_index)? {
                 return Ok(());
             }
